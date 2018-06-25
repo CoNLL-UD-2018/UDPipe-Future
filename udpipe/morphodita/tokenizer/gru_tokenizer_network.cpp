@@ -19,6 +19,7 @@ gru_tokenizer_network* gru_tokenizer_network::load(binary_decoder& data) {
     case 16: return gru_tokenizer_network_implementation<16>::load(data);
     case 24: return gru_tokenizer_network_implementation<24>::load(data);
     case 64: return gru_tokenizer_network_implementation<64>::load(data);
+    case 128: return gru_tokenizer_network_implementation<128>::load(data);
   }
   return nullptr;
 }
