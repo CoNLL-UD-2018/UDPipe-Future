@@ -189,7 +189,7 @@ bool trainer_morphodita_parsito::train_tokenizer(const vector<sentence>& trainin
              << ", allow_spaces=" << (allow_spaces ? 1 : 0) << ", dimension=" << dimension << endl
              << "  epochs=" << epochs << ", batch_size=" << batch_size << ", segment_size=" << segment_size
              << ", learning_rate=" << fixed << setprecision(4) << learning_rate << ", learning_rate_final=" << learning_rate_final << endl
-             << ", beta_2=" << beta_2 << ", dropout=" << dropout << ", early_stopping=" << (early_stopping ? 1 : 0) << endl;
+             << "  beta_2=" << beta_2 << ", dropout=" << dropout << ", early_stopping=" << (early_stopping ? 1 : 0) << endl;
 
         // Train and encode gru_tokenizer
         os.put(morphodita::tokenizer_ids::GRU);
