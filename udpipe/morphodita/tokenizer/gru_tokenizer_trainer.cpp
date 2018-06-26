@@ -20,7 +20,7 @@ namespace udpipe {
 namespace morphodita {
 
 bool gru_tokenizer_trainer::train(unsigned url_email_tokenizer, unsigned segment, bool allow_spaces, unsigned dimension, unsigned epochs,
-                                  unsigned batch_size, float learning_rate, float learning_rate_final, float dropout,
+                                  unsigned batch_size, float learning_rate, float learning_rate_final, float beta_2, float dropout,
                                   float initialization_range, bool early_stopping, const vector<tokenized_sentence>& data,
                                   const vector<tokenized_sentence>& heldout, ostream& os, string& error) {
   using namespace unilib;
@@ -39,19 +39,19 @@ bool gru_tokenizer_trainer::train(unsigned url_email_tokenizer, unsigned segment
   if (dimension == 16) {
     gru_tokenizer_network_trainer<16> network;
     if (!network.train(url_email_tokenizer, segment, allow_spaces, epochs, batch_size, learning_rate, learning_rate_final,
-                       dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
+                       beta_2, dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
   } else if (dimension == 24) {
     gru_tokenizer_network_trainer<24> network;
     if (!network.train(url_email_tokenizer, segment, allow_spaces, epochs, batch_size, learning_rate, learning_rate_final,
-                       dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
+                       beta_2, dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
   } else if (dimension == 64) {
     gru_tokenizer_network_trainer<64> network;
     if (!network.train(url_email_tokenizer, segment, allow_spaces, epochs, batch_size, learning_rate, learning_rate_final,
-                       dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
+                       beta_2, dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
   } else if (dimension == 128) {
     gru_tokenizer_network_trainer<128> network;
     if (!network.train(url_email_tokenizer, segment, allow_spaces, epochs, batch_size, learning_rate, learning_rate_final,
-                       dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
+                       beta_2, dropout, initialization_range, early_stopping, data, heldout, enc, error)) return false;
   } else {
     return error.assign("Gru tokenizer dimension '").append(to_string(dimension)).append("' is not supported!"), false;
   }

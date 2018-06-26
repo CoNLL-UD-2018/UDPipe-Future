@@ -32,7 +32,7 @@ template <int D>
 class gru_tokenizer_network_trainer : public gru_tokenizer_network_implementation<D> {
  public:
   bool train(unsigned url_email_tokenizer, unsigned segment, bool allow_spaces, unsigned epochs, unsigned batch_size,
-             float learning_rate, float learning_rate_final, float dropout, float initialization_range,
+             float learning_rate, float learning_rate_final, float beta_2, float dropout, float initialization_range,
              bool early_stopping, const vector<tokenized_sentence>& data, const vector<tokenized_sentence>& heldout,
              binary_encoder& enc, string& error);
 
@@ -48,7 +48,7 @@ class gru_tokenizer_network_trainer : public gru_tokenizer_network_implementatio
     float w_v[R][C], b_v[R];
 
     matrix_trainer(matrix<R, C>& original) : original(original), w_g(), b_g(), w_m(), b_m(), w_v(), b_v() {}
-    void update_weights(float learning_rate);
+    void update_weights(float learning_rate, float beta_2);
   };
   struct gru_trainer {
     matrix_trainer<D,D> X, X_r, X_z;
@@ -58,7 +58,7 @@ class gru_tokenizer_network_trainer : public gru_tokenizer_network_implementatio
     gru_trainer(gru& g, unsigned segment)
         : X(g.X), X_r(g.X_r), X_z(g.X_z), H(g.H), H_r(g.H_r), H_z(g.H_z), states(segment + 1),
         updates(segment), resets(segment), resetstates(segment), candidates(segment), dropouts(segment) {}
-    void update_weights(float learning_rate);
+    void update_weights(float learning_rate, float beta_2);
   };
 
   struct f1_info { double precision, recall, f1; };
@@ -79,7 +79,7 @@ class gru_tokenizer_network_trainer : public gru_tokenizer_network_implementatio
 
 template <int D>
 bool gru_tokenizer_network_trainer<D>::train(unsigned url_email_tokenizer, unsigned segment, bool allow_spaces, unsigned epochs, unsigned batch_size,
-                                             float learning_rate_initial, float learning_rate_final, float dropout,
+                                             float learning_rate_initial, float learning_rate_final, float beta_2, float dropout,
                                              float initialization_range, bool early_stopping, const vector<tokenized_sentence>& data,
                                              const vector<tokenized_sentence>& heldout, binary_encoder& enc, string& error) {
   if (segment < 10) return error.assign("Segment size must be at least 10!"), false;
@@ -289,19 +289,19 @@ bool gru_tokenizer_network_trainer<D>::train(unsigned url_email_tokenizer, unsig
           instance+1 == instances ||
           (instance+1) % batch_size == 0) {
         b1t *= 0.9f;
-        b2t *= 0.999f;
+        b2t *= beta_2;
         float learning_rate_biased = learning_rate * sqrt(1-b2t) / (1-b1t);
 
         if (batch_size == 1)
           for (auto&& chosen_embedding : chosen_embeddings)
-            chosen_embedding->update_weights(learning_rate_biased);
+            chosen_embedding->update_weights(learning_rate_biased, beta_2);
         else
           for (auto&& embedding : embeddings)
-            embedding.second.update_weights(learning_rate_biased);
-        gru_fwd.update_weights(learning_rate_biased);
-        gru_bwd.update_weights(learning_rate_biased);
-        projection_fwd.update_weights(learning_rate_biased);
-        projection_bwd.update_weights(learning_rate_biased);
+            embedding.second.update_weights(learning_rate_biased, beta_2);
+        gru_fwd.update_weights(learning_rate_biased, beta_2);
+        gru_bwd.update_weights(learning_rate_biased, beta_2);
+        projection_fwd.update_weights(learning_rate_biased, beta_2);
+        projection_bwd.update_weights(learning_rate_biased, beta_2);
       }
     }
     if (learning_rate_final && learning_rate_final != learning_rate_initial)
@@ -358,15 +358,15 @@ bool gru_tokenizer_network_trainer<D>::train(unsigned url_email_tokenizer, unsig
 }
 
 template <int D> template <int R, int C>
-void gru_tokenizer_network_trainer<D>::matrix_trainer<R, C>::update_weights(float learning_rate) {
+void gru_tokenizer_network_trainer<D>::matrix_trainer<R, C>::update_weights(float learning_rate, float beta_2) {
   for (int i = 0; i < R; i++) {
     for (int j = 0; j < C; j++) {
       w_m[i][j] = 0.9 * w_m[i][j] + (1-0.9) * w_g[i][j];
-      w_v[i][j] = 0.999 * w_v[i][j] + (1-0.999) * w_g[i][j] * w_g[i][j];
+      w_v[i][j] = beta_2 * w_v[i][j] + (1-beta_2) * w_g[i][j] * w_g[i][j];
       original.w[i][j] += learning_rate * w_m[i][j] / (sqrt(w_v[i][j]) + 1e-8);
     }
     b_m[i] = 0.9 * b_m[i] + (1-0.9) * b_g[i];
-    b_v[i] = 0.999 * b_v[i] + (1-0.999) * b_g[i] * b_g[i];
+    b_v[i] = beta_2 * b_v[i] + (1-beta_2) * b_g[i] * b_g[i];
     original.b[i] += learning_rate * b_m[i] / (sqrt(b_v[i]) + 1e-8);
   }
 
@@ -378,13 +378,13 @@ void gru_tokenizer_network_trainer<D>::matrix_trainer<R, C>::update_weights(floa
 }
 
 template <int D>
-void gru_tokenizer_network_trainer<D>::gru_trainer::update_weights(float learning_rate) {
-  X.update_weights(learning_rate);
-  X_r.update_weights(learning_rate);
-  X_z.update_weights(learning_rate);
-  H.update_weights(learning_rate);
-  H_r.update_weights(learning_rate);
-  H_z.update_weights(learning_rate);
+void gru_tokenizer_network_trainer<D>::gru_trainer::update_weights(float learning_rate, float beta_2) {
+  X.update_weights(learning_rate, beta_2);
+  X_r.update_weights(learning_rate, beta_2);
+  X_z.update_weights(learning_rate, beta_2);
+  H.update_weights(learning_rate, beta_2);
+  H_r.update_weights(learning_rate, beta_2);
+  H_z.update_weights(learning_rate, beta_2);
 }
 
 template <int D>

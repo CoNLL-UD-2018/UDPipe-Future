@@ -177,6 +177,7 @@ bool trainer_morphodita_parsito::train_tokenizer(const vector<sentence>& trainin
         double learning_rate = run <= 1 ? 0.005 : hyperparameter_logarithmic(run, 2, 0.0005, 0.01);
         if (!option_double(tokenizer, "learning_rate", learning_rate, error)) return false;
         double learning_rate_final = 0.0; if (!option_double(tokenizer, "learning_rate_final", learning_rate_final, error)) return false;
+        double beta_2 = 0.999f; if (!option_double(tokenizer, "beta_2", beta_2, error)) return false;
         double dropout = 0.1; if (!option_double(tokenizer, "dropout", dropout, error)) return false;
         double initialization_range = 0.5; if (!option_double(tokenizer, "initialization_range", initialization_range, error)) return false;
         bool early_stopping = !heldout_sentences.empty(); if (!option_bool(tokenizer, "early_stopping", early_stopping, error)) return false;
@@ -186,14 +187,15 @@ bool trainer_morphodita_parsito::train_tokenizer(const vector<sentence>& trainin
 
         cerr << "Training tokenizer with the following options: " << "tokenize_url=" << (tokenize_url ? 1 : 0)
              << ", allow_spaces=" << (allow_spaces ? 1 : 0) << ", dimension=" << dimension << endl
-             << "  epochs=" << epochs << ", batch_size=" << batch_size << ", learning_rate=" << fixed << setprecision(4) << learning_rate
-             << ", dropout=" << dropout << ", early_stopping=" << (early_stopping ? 1 : 0) << endl;
+             << "  epochs=" << epochs << ", batch_size=" << batch_size << ", segment_size=" << segment_size
+             << ", learning_rate=" << fixed << setprecision(4) << learning_rate << ", learning_rate_final=" << learning_rate_final << endl
+             << ", beta_2=" << beta_2 << ", dropout=" << dropout << ", early_stopping=" << (early_stopping ? 1 : 0) << endl;
 
         // Train and encode gru_tokenizer
         os.put(morphodita::tokenizer_ids::GRU);
         if (!morphodita::gru_tokenizer_trainer::train(tokenize_url ? morphodita::gru_tokenizer_trainer::URL_EMAIL_LATEST : 0,
                                                       segment_size, allow_spaces, dimension, epochs, batch_size, learning_rate,
-                                                      learning_rate_final, dropout, initialization_range, early_stopping,
+                                                      learning_rate_final, beta_2, dropout, initialization_range, early_stopping,
                                                       sentences, heldout_sentences, os, error))
           return false;
       } else {
