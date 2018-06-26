@@ -28,7 +28,7 @@ bool trainer::train(const string& method, const vector<sentence>& training, cons
   os_buffer.put(method.size());
   os_buffer.write(method.c_str(), method.size());
 
-//  try {
+  try {
     if (method == "morphodita_parsito") {
       if (!trainer_morphodita_parsito::train(training, heldout, tokenizer, tagger, parser, os_buffer, error))
         return false;
@@ -36,10 +36,10 @@ bool trainer::train(const string& method, const vector<sentence>& training, cons
       error.assign("Unknown UDPipe method '").append(method).append("'!");
       return false;
     }
-//  } catch (training_error& e) {
-//    error.assign(e.what());
-//    return false;
-//  }
+  } catch (training_error& e) {
+    error.assign(e.what());
+    return false;
+  }
 
   os << os_buffer.rdbuf();
   return true;

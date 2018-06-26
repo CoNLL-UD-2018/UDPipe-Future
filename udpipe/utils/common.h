@@ -34,7 +34,7 @@ static_assert(sizeof(int) >= sizeof(int32_t), "Int must be at least 4B wide!");
 static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "Only little endian systems are supported!");
 #endif
 
-#define runtime_failure(message) assert((cerr << message << endl, 0))
+#define runtime_failure(message) exit((cerr << message << endl, 1))
 
 } // namespace utils
 } // namespace udpipe
