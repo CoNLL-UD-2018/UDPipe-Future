@@ -245,7 +245,7 @@ bool gru_tokenizer_network_trainer<D>::train(unsigned url_email_tokenizer, unsig
           for (int j = 0; j < D; j++)
             if (gru.dropouts[i].w[0][j])
               for (int k = 0; k < 3; k++)
-                state_g.w[0][j] += projection.original.w[k][j] * output.w[k];
+                state_g.w[0][j] += dropout_multiplier * projection.original.w[k][j] * output.w[k];
 
           resetstate_g.clear();
           for (int j = 0; j < D; j++) {
