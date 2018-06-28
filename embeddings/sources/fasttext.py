@@ -30,9 +30,9 @@ class FastVector:
         self.id2word = []
 
         print('reading word vectors from %s' % vector_file)
-        with open(vector_file, 'r') as f:
+        with open(vector_file, 'r', encoding="utf-8", errors="replace") as f:
             (self.n_words, self.n_dim) = \
-                (int(x) for x in f.readline().rstrip('\n').split(' '))
+                (int(x) for x in f.readline().rstrip(' \n').split(' '))
             self.embed = np.zeros((self.n_words, self.n_dim), dtype=np.float32)
             for i, line in enumerate(f):
                 if max_words and i >= max_words: break
