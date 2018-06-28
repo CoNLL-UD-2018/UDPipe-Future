@@ -7,7 +7,7 @@ wget https://raw.githubusercontent.com/Babylonpartners/fastText_multilingual/mas
 
 python3 convert.py $lang
 
-rm -f wiki.$code.vec $code.txt
+rm -f wiki.$lang.vec $lang.txt
 
 for tbank in $@; do
   for f in $lang.*; do
