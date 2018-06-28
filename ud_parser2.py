@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import numpy as np
 import tensorflow as tf
+import dependency_decoding
 
 import conll18_ud_eval
 import ud_dataset
@@ -80,45 +81,80 @@ class Network:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.tags[tag], output_layer, weights=weights)
 
             # Trees
-            for i in range(args.rnn_layers_parser):
-                (hidden_layer_fwd, hidden_layer_bwd), _ = tf.nn.bidirectional_dynamic_rnn(
-                    rnn_cell(args.rnn_cell_dim), rnn_cell(args.rnn_cell_dim),
-                    hidden_layer, sequence_length=self.sentence_lens + 1, dtype=tf.float32,
-                    scope="word-level-rnn-{}".format(i + args.rnn_layers))
-                hidden_layer += tf.layers.dropout(hidden_layer_fwd + hidden_layer_bwd, rate=args.dropout, training=self.is_training)
+            if args.parse:
+                max_words = tf.shape(self.heads)[1]
 
-            # Heads
-            head_deps = hidden_layer[:, 1:]
-            for _ in range(args.parser_layers):
-                head_deps += tf.layers.dropout(tf.layers.dense(head_deps, args.rnn_cell_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
-            head_roots = hidden_layer
-            for _ in range(args.parser_layers):
-                head_roots += tf.layers.dropout(tf.layers.dense(head_roots, args.rnn_cell_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                for i in range(args.rnn_layers_parser):
+                    (hidden_layer_fwd, hidden_layer_bwd), _ = tf.nn.bidirectional_dynamic_rnn(
+                        rnn_cell(args.rnn_cell_dim), rnn_cell(args.rnn_cell_dim),
+                        hidden_layer, sequence_length=self.sentence_lens + 1, dtype=tf.float32,
+                        scope="word-level-rnn-{}".format(i + args.rnn_layers))
+                    hidden_layer += tf.layers.dropout(hidden_layer_fwd + hidden_layer_bwd, rate=args.dropout, training=self.is_training)
 
-            head_deps_bias = tf.get_variable("head_deps_bias", [args.rnn_cell_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
-            head_roots_bias = tf.get_variable("head_roots_bias", [args.rnn_cell_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
-            head_biaffine = tf.get_variable("heads_biaffine", [args.rnn_cell_dim, args.rnn_cell_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
-            heads = tf.reshape(tf.matmul(tf.reshape(head_deps, [-1, args.rnn_cell_dim]) + head_deps_bias, head_biaffine),
-                               [tf.shape(hidden_layer)[0], -1, args.rnn_cell_dim])
-            heads = tf.matmul(heads, head_roots + head_roots_bias, transpose_b=True)
-            if args.label_smoothing:
-                num_heads = tf.shape(self.heads)[1] + 1
-                gold_labels = tf.one_hot(self.heads, num_heads) * (1 - args.label_smoothing) + args.label_smoothing / tf.to_float(num_heads)
-                loss += tf.losses.softmax_cross_entropy(gold_labels, heads, weights=weights)
-            else:
-                loss += tf.losses.sparse_softmax_cross_entropy(self.heads, heads, weights=weights)
-            self.heads_logs = tf.nn.log_softmax(heads)
+                # Heads
+                head_deps = hidden_layer[:, 1:]
+                for _ in range(args.parser_layers):
+                    head_deps += tf.layers.dropout(tf.layers.dense(head_deps, args.rnn_cell_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                head_roots = hidden_layer
+                for _ in range(args.parser_layers):
+                    head_roots += tf.layers.dropout(tf.layers.dense(head_roots, args.rnn_cell_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
 
-            # Deprels
-            deprel_deps = tf.layers.dropout(tf.layers.dense(hidden_layer[:, 1:], args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
-            for _ in range(args.parser_layers - 1):
-                deprel_deps += tf.layers.dropout(tf.layers.dense(deprel_deps, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
-            deprel_roots = tf.layers.dropout(tf.layers.dense(hidden_layer, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
-            for _ in range(args.parser_layers - 1):
-                deprel_roots += tf.layers.dropout(tf.layers.dense(deprel_roots, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                head_deps_bias = tf.get_variable("head_deps_bias", [args.rnn_cell_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
+                head_roots_bias = tf.get_variable("head_roots_bias", [args.rnn_cell_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
+                head_biaffine = tf.get_variable("head_biaffine", [args.rnn_cell_dim, args.rnn_cell_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
+                # Deprels
+                deprel_deps = tf.layers.dropout(tf.layers.dense(hidden_layer[:, 1:], args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                for _ in range(args.parser_layers - 1):
+                    deprel_deps += tf.layers.dropout(tf.layers.dense(deprel_deps, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                deprel_roots = tf.layers.dropout(tf.layers.dense(hidden_layer, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                for _ in range(args.parser_layers - 1):
+                    deprel_roots += tf.layers.dropout(tf.layers.dense(deprel_roots, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+
+                deprel_deps_bias = tf.get_variable("deprel_deps_bias", [args.parser_deprel_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
+                deprel_roots_bias = tf.get_variable("deprel_roots_bias", [args.parser_deprel_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
+                deprel_biaffine = tf.get_variable("deprel_biaffine", [args.parser_deprel_dim, args.parser_deprel_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
+
+                def map_heads(packed_args):
+                    sentence_len, head_deps, head_roots, head_gold = packed_args
+
+                    head_deps = head_deps[:sentence_len]
+                    head_roots = head_roots[:sentence_len + 1]
+                    head_gold = head_gold[:sentence_len]
+
+                    heads = tf.matmul(head_deps + head_deps_bias, head_biaffine)
+                    heads = tf.matmul(heads, head_roots + head_roots_bias, transpose_b=True)
+                    heads_logs = tf.nn.log_softmax(heads)
+                    if args.label_smoothing:
+                        gold_labels = tf.one_hot(head_gold, sentence_len + 1) * (1 - args.label_smoothing)
+                        gold_labels += args.label_smoothing / tf.to_float(sentence_len + 1)
+                        loss = tf.losses.softmax_cross_entropy(gold_labels, heads)
+                    else:
+                        loss = tf.losses.sparse_softmax_cross_entropy(head_gold, heads)
+                    return (tf.pad(heads, ((0, max_words - sentence_len), (0, max_words - sentence_len))),
+                            tf.pad(heads_logs, ((0, max_words - sentence_len), (0, max_words - sentence_len))),
+                            loss)
+
+                heads, self.heads_logs, head_losses = tf.map_fn(map_heads, (self.sentence_lens, head_deps, head_roots, self.heads),
+                                                                (tf.float32, tf.float32, tf.float32), args.batch_size)
+                loss += tf.reduce_mean(head_losses)
+
+#                 heads = tf.reshape(tf.matmul(tf.reshape(head_deps, [-1, args.rnn_cell_dim]) + head_deps_bias, head_biaffine),
+#                                    [tf.shape(hidden_layer)[0], -1, args.rnn_cell_dim])
+#                 heads = tf.matmul(heads, head_roots + head_roots_bias, transpose_b=True)
+#                 if args.label_smoothing:
+#                     num_heads = tf.shape(self.heads)[1] + 1
+#                     gold_labels = tf.one_hot(self.heads, num_heads) * (1 - args.label_smoothing)
+#                     gold_labels += args.label_smoothing / tf.to_float(num_heads)
+# #                     gold_labels2 = gold_labels + args.label_smoothing / tf.to_float(num_heads)
+# #                     gold_labels += args.label_smoothing / tf.to_float(tf.reshape(self.sentence_lens + 1, [-1, 1, 1]))
+# #                     gold_labels = tf.Print(gold_labels, [gold_labels - gold_labels2], summarize=9999)
+#                     loss += tf.losses.softmax_cross_entropy(gold_labels, heads, weights=weights)
+#                 else:
+#                     loss += tf.losses.sparse_softmax_cross_entropy(self.heads, heads, weights=weights)
+#                 self.heads_logs = tf.nn.log_softmax(heads)
 
             # Pretrain saver
-            self.saver_inference = tf.train.Saver(max_to_keep=2)
+            self.saver_inference = tf.train.Saver(max_to_keep=None)
 
             # Training
             self.global_step = tf.train.create_global_step()
@@ -133,21 +169,22 @@ class Network:
             with summary_writer.as_default(), tf.contrib.summary.record_summaries_every_n_global_steps(100):
                 self.summaries["train"] = [
                     tf.contrib.summary.scalar("train/loss", loss),
-                    tf.contrib.summary.scalar("train/lr", self.learning_rate),
-                    tf.contrib.summary.scalar(
-                        "train/heads_acc",
-                        tf.reduce_sum(tf.cast(tf.equal(self.heads, tf.argmax(heads, axis=-1, output_type=tf.int32)), tf.float32) * weights) / weights_sum)]
+                    tf.contrib.summary.scalar("train/lr", self.learning_rate)]
                 for tag in args.tags:
                     self.summaries["train"].append(tf.contrib.summary.scalar(
                         "train/{}".format(tag),
                         tf.reduce_sum(tf.cast(tf.equal(self.tags[tag], self.predictions[tag]), tf.float32) * weights) /
                         weights_sum))
+                if args.parse:
+                    heads_acc = tf.reduce_sum(tf.cast(tf.equal(self.heads, tf.argmax(heads, axis=-1, output_type=tf.int32)),
+                                                      tf.float32) * weights) / weights_sum
+                    self.summaries["train"].extend([tf.contrib.summary.scalar("train/heads_acc", heads_acc)])
 
             with summary_writer.as_default(), tf.contrib.summary.always_record_summaries():
                 self.current_loss, self.update_loss = tf.metrics.mean(loss, weights=weights_sum)
                 self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
                 self.metrics = dict((metric, tf.placeholder(tf.float32, [])) for metric in self.METRICS)
-                for dataset in ["dev", "test"]:
+                for dataset in ["dev", "dev-udpipe", "test"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", self.current_loss)]
                     for metric in self.METRICS:
                         self.summaries[dataset].append(tf.contrib.summary.scalar("{}/{}".format(dataset, metric),
@@ -172,38 +209,61 @@ class Network:
 
                 feeds = {self.is_training: True, self.learning_rate: learning_rate, self.sentence_lens: sentence_lens,
                          self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
-                         self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
-                         self.heads: word_ids[train.HEAD]}
+                         self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS]}
                 for tag in args.tags: feeds[self.tags[tag]] = word_ids[train.FACTORS_MAP[tag]]
+                if args.parse: feeds[self.heads] = word_ids[train.HEAD]
                 self.session.run([self.training, self.summaries["train"]], feeds)
                 batches += 1
                 if at_least_one_epoch: break
             at_least_one_epoch = True
 
-    def evaluate(self, dataset_name, dataset, dataset_conllu, args):
+    def predict(self, dataset, args):
         import io
-
         conllu, sentences = io.StringIO(), 0
 
-        self.session.run(self.reset_metrics)
         while not dataset.epoch_finished():
             sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = dataset.next_batch(args.batch_size)
 
-
             feeds = {self.is_training: False, self.sentence_lens: sentence_lens,
                      self.charseqs: charseqs[train.FORMS], self.charseq_lens: charseq_lens[train.FORMS],
-                     self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS],
-                     self.heads: word_ids[train.HEAD]}
+                     self.word_ids: word_ids[train.FORMS], self.charseq_ids: charseq_ids[train.FORMS]}
             for tag in args.tags: feeds[self.tags[tag]] = word_ids[train.FACTORS_MAP[tag]]
-            predictions, _ = self.session.run([self.predictions, self.update_loss], feeds)
+            if args.parse: feeds[self.heads] = word_ids[train.HEAD]
+
+            if args.parse:
+                predictions, heads, _ = self.session.run([self.predictions, self.heads_logs, self.update_loss], feeds)
+            else:
+                 predictions, _ = self.session.run([self.predictions, self.update_loss], feeds)
 
             for i in range(len(sentence_lens)):
                 overrides = [None] * dataset.FACTORS
                 for tag in args.tags: overrides[dataset.FACTORS_MAP[tag]] = predictions[tag][i]
+                if args.parse:
+                    padded_heads = np.pad(heads[i][:sentence_lens[i], :sentence_lens[i] + 1].astype(np.float), ((1, 0), (0, 0)), mode="constant")
+                    roots, _ = dependency_decoding.chu_liu_edmonds(padded_heads)
+                    if np.count_nonzero(roots) != len(roots) - 1:
+                        best_score = None
+                        padded_heads[:, 0] = np.nan
+                        for r in range(len(roots)):
+                            if roots[r] == 0:
+                                padded_heads[r, 0] = heads[i][r - 1, 0]
+                                current_roots, current_score = dependency_decoding.chu_liu_edmonds(padded_heads)
+                                padded_heads[r, 0] = np.nan
+                                if best_score is None or current_score > best_score: best_score, best_roots = current_score, current_roots
+                        roots = best_roots
+
+                    overrides[dataset.HEAD] = roots[1:]
                 dataset.write_sentence(conllu, sentences, overrides)
                 sentences += 1
 
-        metrics = conll18_ud_eval.evaluate(dataset_conllu, conll18_ud_eval.load_conllu(io.StringIO(conllu.getvalue())))
+        return conllu.getvalue()
+
+    def evaluate(self, dataset_name, dataset, dataset_conllu, args):
+        import io
+
+        self.session.run(self.reset_metrics)
+        conllu = self.predict(dataset, args)
+        metrics = conll18_ud_eval.evaluate(dataset_conllu, conll18_ud_eval.load_conllu(io.StringIO(conllu)))
         self.session.run(self.summaries[dataset_name],
                          dict((self.metrics[metric], metrics[metric].f1) for metric in self.METRICS))
 
@@ -234,6 +294,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
     parser.add_argument("--label_smoothing", default=0.03, type=float, help="Label smoothing.")
     parser.add_argument("--lr_allow_copy", default=0, type=int, help="Allow_copy in lemma rule.")
+    parser.add_argument("--parse", default=1, type=int, help="Parse.")
     parser.add_argument("--parser_layers", default=1, type=int, help="Parser layers.")
     parser.add_argument("--parser_deprel_dim", default=128, type=int, help="Parser deprel dim.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
@@ -270,6 +331,8 @@ if __name__ == "__main__":
     train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), args.lr_allow_copy, root_factors)
     dev = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), args.lr_allow_copy, root_factors,
                                train=train, shuffle_batches=False)
+    dev_udpipe = ud_dataset.UDDataset("{}-ud-dev-udpipe.conllu".format(args.basename), args.lr_allow_copy, root_factors,
+                               train=train, shuffle_batches=False)
     dev_conllu = conll18_ud_eval.load_conllu_file("{}-ud-dev.conllu".format(args.basename))
 
     # Construct the network
@@ -292,6 +355,7 @@ if __name__ == "__main__":
         for epoch in range(epochs):
             network.train_epoch(train, learning_rate, args)
 
+            network.evaluate("dev-udpipe", dev_udpipe, dev_conllu, args)
             dev_accuracy, metrics = network.evaluate("dev", dev, dev_conllu, args)
             metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
             print("Epoch {}, lr {}, dev {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
@@ -299,5 +363,7 @@ if __name__ == "__main__":
             if dev_accuracy > dev_best:
                 network.saver_train.save(network.session, "{}/checkpoint-best".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
             dev_best = max(dev_best, dev_accuracy)
+
+            if epoch + 1 == epochs or (i == len(args.epochs) - 1 and (epoch + 10 == epochs or epoch + 5 >= epochs)):
+                network.saver_inference.save(network.session, "{}/checkpoint-inference".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
     network.saver_train.save(network.session, "{}/checkpoint-last".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
-    network.saver_inference.save(network.session, "{}/checkpoint-inference".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
