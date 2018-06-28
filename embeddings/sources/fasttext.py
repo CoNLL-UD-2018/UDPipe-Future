@@ -22,7 +22,7 @@ class FastVector:
     ```
     """
 
-    def __init__(self, vector_file='', transform=None):
+    def __init__(self, vector_file='', max_words=None, transform=None):
         """Read in word vectors in fasttext format"""
         self.word2id = {}
 
@@ -35,6 +35,7 @@ class FastVector:
                 (int(x) for x in f.readline().rstrip('\n').split(' '))
             self.embed = np.zeros((self.n_words, self.n_dim), dtype=np.float32)
             for i, line in enumerate(f):
+                if max_words and i >= max_words: break
                 elems = line.rstrip('\n').split(' ')
                 self.word2id[elems[0]] = i
                 self.embed[i] = elems[1:self.n_dim+1]
@@ -59,7 +60,7 @@ class FastVector:
         or a numpy ndarray.
         """
         transmat = np.loadtxt(transform) if isinstance(transform, str) else transform
-        self.embed = np.matmul(self.embed, transmat)
+        self.embed = np.matmul(self.embed, transmat).astype(np.float32)
 
     def export(self, outpath):
         """
