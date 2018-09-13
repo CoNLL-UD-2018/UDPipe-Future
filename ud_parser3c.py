@@ -377,9 +377,9 @@ if __name__ == "__main__":
                           len(train.factors[train.DEPREL].words), predict_only=True)
             for checkpoint in checkpoints[1:]:
                 tmp.saver_inference.restore(tmp.session, checkpoint)
-                for i, variable in enumerate(tmp.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)):
-                    network.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)[i].load(
-                        variable.eval(tmp.session), network.session)
+                for i, tmp_variable in enumerate(tmp.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)):
+                    variable = network.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)[i]
+                    variable.load(variable.eval(network.session) + tmp_variable.eval(tmp.session), network.session)
             del tmp
             for variable in network.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
                 variable.load(variable.eval(network.session) / len(checkpoints), network.session)
