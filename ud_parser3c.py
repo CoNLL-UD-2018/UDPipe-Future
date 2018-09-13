@@ -337,7 +337,7 @@ if __name__ == "__main__":
     parser.add_argument("--word_dropout", default=0.2, type=float, help="Word dropout")
     # Load defaults
     args, defaults = parser.parse_args(), []
-    with open("ud_parser.args", "r") as args_file:
+    with open(re.sub(r"\d+[a-z]*.py$", ".args", __file__), "r") as args_file:
         for line in args_file:
             columns = line.rstrip("\n").split()
             if re.search(columns[0], args.basename): defaults.extend(columns[1:])
