@@ -106,6 +106,7 @@ class UDDataset:
     DEPS = 7
     MISC = 8
     FACTORS = 9
+    EMBEDDINGS = 9
 
     FACTORS_MAP = {"FORMS": FORMS, "LEMMAS": LEMMAS, "UPOS": UPOS, "XPOS": XPOS, "FEATS": FEATS,
                    "HEAD": HEAD, "DEPREL": DEPREL, "DEPS": DEPS, "MISC": MISC}
@@ -136,13 +137,20 @@ class UDDataset:
                 self.charseqs = [[self.PAD], [self.UNK], [self.ROOT]]
                 self.charseq_ids = []
 
-    def __init__(self, filename, lr_allow_copy, root_factors=[], train=None, shuffle_batches=True, max_sentences=None):
+    def __init__(self, filename, lr_allow_copy, root_factors=[], embeddings=None, train=None, shuffle_batches=True, max_sentences=None):
         # Create factors
         self._factors = []
         for f in range(self.FACTORS):
             self._factors.append(self._Factor(f in root_factors, f == self.FORMS, train._factors[f] if train else None))
         self._extras = []
 
+        # Prepare embeddings
+        self._embeddings = {}
+        if train is not None:
+            self._embeddings = train._embeddings
+        elif embeddings is not None:
+            for i, word in enumerate(embeddings):
+                self._embeddings[word.lower()] = i + 1
 
         # Load the sentences
         with open(filename, "r", encoding="utf-8") as file:
@@ -260,6 +268,14 @@ class UDDataset:
             batch_word_ids.append(np.zeros([batch_size, max_sentence_len + factor.with_root], np.int32))
             for i in range(batch_size):
                 batch_word_ids[-1][i, 0:batch_sentence_lens[i] + factor.with_root] = factor.word_ids[batch_perm[i]]
+
+        # Embeddings
+        forms = self._factors[self.FORMS]
+        batch_word_ids.append(np.zeros([batch_size, max_sentence_len + forms.with_root], np.int32))
+        if len(self._embeddings):
+            for i in range(batch_size):
+                for j, string in enumerate(forms.strings[batch_perm[i]]):
+                    batch_word_ids[-1][i, j] = self._embeddings.get(string.lower(), 0)
 
         # Character-level data
         batch_charseq_ids, batch_charseqs, batch_charseq_lens = [], [], []
