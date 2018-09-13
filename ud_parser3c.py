@@ -93,7 +93,7 @@ class Network:
 
             # Trees
             if args.parse:
-                max_words = tf.shape(self.heads)[1]
+                max_words = tf.reduce_max(self.sentence_lens)
 
                 if args.rnn_layers == 0:
                     parser_inputs = [inputs]
