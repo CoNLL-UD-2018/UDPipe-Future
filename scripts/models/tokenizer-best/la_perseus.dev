@@ -1,3 +1,0 @@
-Number of SpaceAfter=No features in gold data: 290
-Tokenizer words - system: 1795, gold: 1797, precision: 99.89%, recall: 99.78%, f1: 99.83%
-Tokenizer sentences - system: 134, gold: 134, precision: 100.00%, recall: 100.00%, f1: 100.00%

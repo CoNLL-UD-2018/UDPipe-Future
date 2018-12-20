@@ -26,3 +26,6 @@ for tb in ud-treebanks-v2.2/*/*-ud-train.conllu; do
   done
 done
 rm -r ud-treebanks-v2.2
+
+#Fix errors in ro_nonstandard
+sed 's/^\([0-9]*\t.*\)[ ]\([^\t]*\)$/\1\2/' -i ro_nonstandard/ro_nonstandard-ud-*.conllu

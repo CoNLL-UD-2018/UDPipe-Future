@@ -111,17 +111,9 @@ class UDDataset:
     FACTORS_MAP = {"FORMS": FORMS, "LEMMAS": LEMMAS, "UPOS": UPOS, "XPOS": XPOS, "FEATS": FEATS,
                    "HEAD": HEAD, "DEPREL": DEPREL, "DEPS": DEPS, "MISC": MISC}
 
-    UNIVERSAL_FEATURES = {
-        "PronType", "NumType", "Poss", "Reflex", "Foreign", "Abbr", "Gender",
-        "Animacy", "Number", "Case", "Definite", "Degree", "VerbForm", "Mood",
-        "Tense", "Aspect", "Voice", "Evident", "Polarity", "Person", "Polite"
-    }
-
     re_extras = re.compile(r"^#|^\d+-|^\d+\.")
 
     class _Factor:
-        PAD = 0
-        UNK = 1
         ROOT = 2
         def __init__(self, with_root, characters, train=None):
             self.words_map = train.words_map if train else {'<pad>': 0, '<unk>': 1, '<root>': 2}
@@ -133,16 +125,18 @@ class UDDataset:
             if characters:
                 self.alphabet_map = train.alphabet_map if train else {'<pad>': 0, '<unk>': 1, '<root>': 2}
                 self.alphabet = train.alphabet if train else ['<pad>', '<unk>', '<root>']
-                self.charseqs_map = {'<pad>': 0, '<unk>': 2, '<root>': 1}
-                self.charseqs = [[self.PAD], [self.UNK], [self.ROOT]]
+                self.charseqs_map = {'<pad>': 0, '<unk>': 1, '<root>': 2}
+                self.charseqs = [[0], [1], [2]]
                 self.charseq_ids = []
 
-    def __init__(self, filename, lr_allow_copy, root_factors=[], embeddings=None, train=None, shuffle_batches=True, max_sentences=None):
+    def __init__(self, filename, root_factors=[], embeddings=None, train=None, shuffle_batches=True, max_sentences=None):
         # Create factors
         self._factors = []
         for f in range(self.FACTORS):
             self._factors.append(self._Factor(f in root_factors, f == self.FORMS, train._factors[f] if train else None))
         self._extras = []
+        self._lr_allow_copy = train._lr_allow_copy if train else None
+        lemma_dict_with_copy, lemma_dict_no_copy = {}, {}
 
         # Prepare embeddings
         self._embeddings = {}
@@ -187,16 +181,8 @@ class UDDataset:
                         factor.strings[-1].append(word)
 
                         # Preprocess word
-                        if f == self.LEMMAS:
-                            word = _gen_lemma_rule(columns[self.FORMS], columns[self.LEMMAS], lr_allow_copy)
-                            # print(columns[self.FORMS], columns[self.LEMMAS], word, _apply_lemma_rule(columns[self.FORMS], word))
-                            # assert(_apply_lemma_rule(columns[self.FORMS], word) == columns[self.LEMMAS])
-
-                        if f == self.FEATS:
-                            word = "|".join(sorted(feat for feat in word.split("|")
-                                                   if feat.split("=", 1)[0] in self.UNIVERSAL_FEATURES))
-                        if f == self.DEPREL:
-                            word = word.split(":")[0]
+                        if f == self.LEMMAS and self._lr_allow_copy is not None:
+                            word = _gen_lemma_rule(columns[self.FORMS], columns[self.LEMMAS], self._lr_allow_copy)
 
                         # Character-level information
                         if factor.characters:
@@ -216,6 +202,10 @@ class UDDataset:
                         # Word-level information
                         if f == self.HEAD:
                             factor.word_ids[-1].append(int(word) if word != "_" else -1)
+                        elif f == self.LEMMAS and self._lr_allow_copy is None:
+                            factor.word_ids[-1].append(0)
+                            lemma_dict_with_copy[_gen_lemma_rule(columns[self.FORMS], word, True)] = 1
+                            lemma_dict_no_copy[_gen_lemma_rule(columns[self.FORMS], word, False)] = 1
                         else:
                             if word not in factor.words_map:
                                 if train:
@@ -229,6 +219,19 @@ class UDDataset:
                     in_sentence = False
                     if max_sentences is not None and len(self._factors[self.FORMS].word_ids) >= max_sentences:
                         break
+
+        # Finalize lemmas if needed
+        if self._lr_allow_copy is None:
+            self._lr_allow_copy = True if len(lemma_dict_with_copy) < len(lemma_dict_no_copy) else False
+            lemmas = self._factors[self.LEMMAS]
+            for i in range(len(lemmas.word_ids)):
+                for j in range(lemmas.with_root, len(lemmas.word_ids[i])):
+                    word = _gen_lemma_rule(self._factors[self.FORMS].strings[i][j - lemmas.with_root + self._factors[self.FORMS].with_root],
+                                           lemmas.strings[i][j], self._lr_allow_copy)
+                    if word not in lemmas.words_map:
+                        lemmas.words_map[word] = len(lemmas.words)
+                        lemmas.words.append(word)
+                    lemmas.word_ids[i][j] = lemmas.words_map[word]
 
         # Compute sentence lengths
         sentences = len(self._factors[self.FORMS].word_ids)

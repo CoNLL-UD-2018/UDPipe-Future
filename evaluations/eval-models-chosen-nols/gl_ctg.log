@@ -1,8 +1,0 @@
-Loading UDPipe model: done.
-2018-07-10 07:18:41.667036: I tensorflow/core/platform/cpu_feature_guard.cc:137] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
-Prediction of 29753 words took 41.46282124519348 wall time and 324.356855074 process time
-======= EPILOG: Tue Jul 10 07:19:43 CEST 2018
-== Limits:   mem_free=8G
-== Usage:    cpu=00:03:50, mem=147.03784 GB s, io=0.36034 GB, vmem=743.102M, maxvmem=752.641M
-== Duration: 00:01:12 (72 s)
-== Server name: orion8

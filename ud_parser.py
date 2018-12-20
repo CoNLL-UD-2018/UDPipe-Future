@@ -4,7 +4,7 @@ import tensorflow as tf
 import dependency_decoding
 
 import conll18_ud_eval
-import ud_dataset
+import ud_dataset2
 
 class Network:
     METRICS = ["UPOS", "XPOS", "UFeats", "AllTags", "Lemmas", "UAS", "LAS", "CLAS", "MLAS", "BLEX"]
@@ -41,10 +41,10 @@ class Network:
                 raise ValueError("Unknown rnn_cell {}".format(args.rnn_cell))
 
             # Word embeddings
-            inputs = 0
+            inputs = []
             if args.we_dim:
                 word_embeddings = tf.get_variable("word_embeddings", shape=[num_words, args.we_dim], dtype=tf.float32)
-                inputs = tf.nn.embedding_lookup(word_embeddings, self.word_ids)
+                inputs.append(tf.nn.embedding_lookup(word_embeddings, self.word_ids))
 
             # Character-level embeddings
             character_embeddings = tf.get_variable("character_embeddings", shape=[num_chars, args.cle_dim], dtype=tf.float32)
@@ -53,12 +53,14 @@ class Network:
             _, (state_fwd, state_bwd) = tf.nn.bidirectional_dynamic_rnn(
                 tf.nn.rnn_cell.GRUCell(args.cle_dim), tf.nn.rnn_cell.GRUCell(args.cle_dim),
                 characters_embedded, sequence_length=self.charseq_lens, dtype=tf.float32)
-            cle = tf.concat([state_fwd, state_bwd], axis=1)
-            inputs += tf.nn.embedding_lookup(cle, self.charseq_ids)
+            cle = state_fwd + state_bwd
+            cle_inputs = tf.nn.embedding_lookup(cle, self.charseq_ids)
+            inputs.append(cle_inputs)
 
             # Embeddings
             if args.embeddings:
-                inputs = tf.concat([inputs, self.embeddings], axis=2)
+                inputs.append(self.embeddings)
+            inputs = tf.concat(inputs, axis=2)
 
             # RNN layers
             hidden_layer = tf.layers.dropout(inputs, rate=args.dropout, training=self.is_training)
@@ -69,7 +71,7 @@ class Network:
                     scope="word-level-rnn-{}".format(i))
                 previous = hidden_layer
                 hidden_layer = tf.layers.dropout(hidden_layer_fwd + hidden_layer_bwd, rate=args.dropout, training=self.is_training)
-                if i or not args.embeddings: hidden_layer += previous
+                if i: hidden_layer += previous
 
             # Tags
             loss = 0
@@ -89,6 +91,7 @@ class Network:
                 tag_layer = tag_hidden_layer
                 for _ in range(args.tag_layers):
                     tag_layer += tf.layers.dropout(tf.layers.dense(tag_layer, args.rnn_cell_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                if tag == "LEMMAS": tag_layer = tf.concat([tag_layer, cle_inputs[:, 1:]], axis=2)
                 output_layer = tf.layers.dense(tag_layer, num_tags[tag])
                 self.predictions[tag] = tf.argmax(output_layer, axis=2, output_type=tf.int32)
 
@@ -97,6 +100,9 @@ class Network:
                     loss += tf.losses.softmax_cross_entropy(gold_labels, output_layer, weights=weights)
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.tags[tag], output_layer, weights=weights)
+                if args.confidence_penalty:
+                    loss += -tf.reduce_mean(args.confidence_penalty * tf.distributions.Categorical(
+                        logits=tf.boolean_mask(output_layer, tf.sequence_mask(self.sentence_lens))).entropy())
 
             # Trees
             if args.parse:
@@ -141,6 +147,9 @@ class Network:
                     loss += tf.losses.softmax_cross_entropy(gold_labels, heads, weights=weights)
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.heads, heads, weights=weights)
+                if args.confidence_penalty:
+                    loss += -tf.reduce_mean(args.confidence_penalty * tf.distributions.Categorical(
+                        logits=tf.boolean_mask(heads, tf.sequence_mask(self.sentence_lens))).entropy())
 
                 # Deprels
                 deprel_deps = tf.layers.dropout(tf.layers.dense(hidden_layer[:, 1:], args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
@@ -168,6 +177,9 @@ class Network:
                     loss += tf.losses.softmax_cross_entropy(gold_labels, head_deprels, weights=weights)
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.deprels, head_deprels, weights=weights)
+                if args.confidence_penalty:
+                    loss += -tf.reduce_mean(args.confidence_penalty * tf.distributions.Categorical(
+                        logits=tf.boolean_mask(head_deprels, tf.sequence_mask(self.sentence_lens))).entropy())
 
             # Pretrain saver
             self.saver_inference = tf.train.Saver(max_to_keep=1)
@@ -205,7 +217,7 @@ class Network:
                 self.current_loss, self.update_loss = tf.metrics.mean(loss, weights=weights_sum)
                 self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
                 self.metrics = dict((metric, tf.placeholder(tf.float32, [])) for metric in self.METRICS)
-                for dataset in ["dev", "dev-udpipe", "test"]:
+                for dataset in ["dev", "dev-udpipe", "test", "test-udpipe"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", self.current_loss)]
                     for metric in self.METRICS:
                         self.summaries[dataset].append(tf.contrib.summary.scalar("{}/{}".format(dataset, metric),
@@ -339,11 +351,11 @@ if __name__ == "__main__":
     parser.add_argument("--char_dropout", default=0, type=float, help="Character dropout")
     parser.add_argument("--checkpoint", default="", type=str, help="Checkpoint.")
     parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
+    parser.add_argument("--confidence_penalty", default=None, type=float, help="Confidence penalty weight.")
     parser.add_argument("--dropout", default=0.5, type=float, help="Dropout")
     parser.add_argument("--embeddings", default=None, type=str, help="External embeddings to use.")
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
     parser.add_argument("--label_smoothing", default=0.03, type=float, help="Label smoothing.")
-    parser.add_argument("--lr_allow_copy", default=0, type=int, help="Allow_copy in lemma rule.")
     parser.add_argument("--parse", default=1, type=int, help="Parse.")
     parser.add_argument("--parser_layers", default=1, type=int, help="Parser layers.")
     parser.add_argument("--parser_deprel_dim", default=128, type=int, help="Parser deprel dim.")
@@ -359,15 +371,9 @@ if __name__ == "__main__":
     parser.add_argument("--tags", default="UPOS,XPOS,FEATS,LEMMAS", type=str, help="Tags.")
     parser.add_argument("--tag_layers", default=1, type=int, help="Additional tag layers.")
     parser.add_argument("--threads", default=4, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
+    parser.add_argument("--we_dim", default=256, type=int, help="Word embedding dimension.")
     parser.add_argument("--word_dropout", default=0.2, type=float, help="Word dropout")
-    # Load defaults
-    args, defaults = parser.parse_args(), []
-    with open(re.sub(r"\d+[a-z]*.py$", ".args", __file__), "r") as args_file:
-        for line in args_file:
-            columns = line.rstrip("\n").split()
-            if re.search(columns[0], args.basename): defaults.extend(columns[1:])
-    args = parser.parse_args(args=defaults + sys.argv[1:])
+    args = parser.parse_args()
 
     # Create logdir name
     args.logdir = "logs/{}-{}-{}".format(
@@ -389,9 +395,13 @@ if __name__ == "__main__":
         args.embeddings_data = np.load("{}.embeddings.npy".format(args.embeddings))
         args.embeddings_size = len(args.embeddings_data[0])
 
-    root_factors = [ud_dataset.UDDataset.FORMS]
-    train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), args.lr_allow_copy, root_factors,
+    root_factors = [ud_dataset2.UDDataset.FORMS]
+    train = ud_dataset2.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
                                  embeddings=args.embeddings_words if args.embeddings else None)
+    dev_udpipe = ud_dataset2.UDDataset("{}-ud-dev-udpipe.conllu".format(args.basename), root_factors,
+                                      train=train, shuffle_batches=False)
+    test_udpipe = ud_dataset2.UDDataset("{}-ud-test-udpipe.conllu".format(args.basename), root_factors,
+                                       train=train, shuffle_batches=False)
 
     # Construct the network
     network = Network(threads=args.threads)
@@ -420,7 +430,7 @@ if __name__ == "__main__":
     if args.predict:
         if args.predict_save_checkpoint:
             network.saver_inference.save(network.session, args.predict_save_checkpoint, write_meta_graph=False)
-        test = ud_dataset.UDDataset(args.predict_input, args.lr_allow_copy, root_factors, train=train, shuffle_batches=False)
+        test = ud_dataset2.UDDataset(args.predict_input, root_factors, train=train, shuffle_batches=False)
         conllu = network.predict(test, False, args)
         print(conllu, end="", file=open(args.predict_output, "w", encoding="utf-8") if args.predict_output else sys.stdout)
         exit(0)
@@ -430,30 +440,29 @@ if __name__ == "__main__":
     log_file = open("{}/log".format(args.logdir), "w")
     for tag in args.tags + ["DEPREL"]:
         print("{}: {}".format(tag, len(train.factors[train.FACTORS_MAP[tag]].words)), file=log_file, flush=True)
-    print("Parsing with args:", "\n".join(("{}: {}".format(key, value) for key, value in sorted(vars(args).items()))), flush=True)
+    print("Parsing with args:", "\n".join(("{}: {}".format(key, value) for key, value in sorted(vars(args).items())
+                                           if key not in ["embeddings_data", "embeddings_words"])), flush=True)
 
-    # Train
-    dev = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), args.lr_allow_copy, root_factors,
-                               train=train, shuffle_batches=False)
-    dev_udpipe = ud_dataset.UDDataset("{}-ud-dev-udpipe.conllu".format(args.basename), args.lr_allow_copy, root_factors,
-                               train=train, shuffle_batches=False)
     dev_conllu = conll18_ud_eval.load_conllu_file("{}-ud-dev.conllu".format(args.basename))
+    test_conllu = conll18_ud_eval.load_conllu_file("{}-ud-test.conllu".format(args.basename))
     dev_best = 0
     for i, (epochs, learning_rate) in enumerate(args.epochs):
         for epoch in range(epochs):
             network.train_epoch(train, learning_rate, args)
 
-            network.evaluate("dev-udpipe", dev_udpipe, dev_conllu, args)
-            dev_accuracy, metrics = network.evaluate("dev", dev, dev_conllu, args)
+            dev_accuracy, metrics = network.evaluate("dev-udpipe", dev_udpipe, dev_conllu, args)
             metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
-            print("Epoch {}, lr {}, dev {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
+            print("Dev, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
 
-            if dev_accuracy > dev_best:
-                network.saver_inference_best.save(network.session, "{}/checkpoint-inference-best".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
-                #network.saver_train.save(network.session, "{}/checkpoint-best".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
+            test_accuracy, metrics = network.evaluate("test-udpipe", test_udpipe, test_conllu, args)
+            metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
+            print("Test, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
+
+            #network.saver_train.save(network.session, "{}/checkpoint".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
+            #if dev_accuracy > dev_best:
+                #network.saver_inference_best.save(network.session, "{}/checkpoint-inference-best".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
             dev_best = max(dev_best, dev_accuracy)
 
             #if epoch + 1 == epochs or (i == len(args.epochs) - 1 and (epoch + 10 == epochs or epoch + 5 >= epochs)):
             #    network.saver_inference.save(network.session, "{}/checkpoint-inference-last".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
     network.saver_inference.save(network.session, "{}/checkpoint-inference-last".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
-    #network.saver_train.save(network.session, "{}/checkpoint-last".format(args.logdir), global_step=network.global_step, write_meta_graph=False)

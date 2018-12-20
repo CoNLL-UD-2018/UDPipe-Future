@@ -1,8 +1,0 @@
-Loading UDPipe model: done.
-2018-07-10 07:20:09.448615: I tensorflow/core/platform/cpu_feature_guard.cc:137] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2
-Prediction of 10078 words took 33.367303133010864 wall time and 258.807026075 process time
-======= EPILOG: Tue Jul 10 07:20:50 CEST 2018
-== Limits:   mem_free=8G
-== Usage:    cpu=00:04:05, mem=116.38879 GB s, io=0.23298 GB, vmem=551.211M, maxvmem=551.211M
-== Duration: 00:00:49 (49 s)
-== Server name: lucifer4

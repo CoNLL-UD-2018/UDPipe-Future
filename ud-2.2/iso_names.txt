@@ -1,7 +1,6 @@
 af_afribooms UD_Afrikaans-AfriBooms
 grc_proiel UD_Ancient_Greek-PROIEL
 grc_perseus UD_Ancient_Greek-Perseus
-ar_nyuad UD_Arabic-NYUAD
 ar_padt UD_Arabic-PADT
 eu_bdt UD_Basque-BDT
 be_hse UD_Belarusian-HSE
