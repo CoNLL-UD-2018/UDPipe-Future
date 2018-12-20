@@ -1,0 +1,16 @@
+Loading UDPipe model: done.
+2018-07-10 14:50:32.693368: I tensorflow/core/platform/cpu_feature_guard.cc:137] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+WARNING:tensorflow:From /lnet/spec/work/people/straka/repos/conll2018_udpipe/venv-cpu/lib/python3.6/site-packages/tensorflow/python/ops/losses/losses_impl.py:691: softmax_cross_entropy_with_logits (from tensorflow.python.ops.nn_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+
+Future major versions of TensorFlow will allow gradients to flow
+into the labels input on backprop by default.
+
+See tf.nn.softmax_cross_entropy_with_logits_v2.
+
+Prediction of 13190 words took 108.5397138595581 wall time and 108.53623773000001 process time
+======= EPILOG: Tue Jul 10 14:52:27 CEST 2018
+== Limits:   mem_free=8G
+== Usage:    cpu=00:01:37, mem=303.92339 GB s, io=2.95551 GB, vmem=3.376G, maxvmem=3.417G
+== Duration: 00:02:26 (146 s)
+== Server name: hector4

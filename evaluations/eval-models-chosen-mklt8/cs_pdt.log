@@ -1,0 +1,14 @@
+Loading UDPipe model: done.
+WARNING:tensorflow:From /lnet/spec/work/people/straka/repos/conll2018_udpipe/venv-cpumkl/lib/python3.6/site-packages/tensorflow/python/ops/losses/losses_impl.py:691: softmax_cross_entropy_with_logits (from tensorflow.python.ops.nn_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+
+Future major versions of TensorFlow will allow gradients to flow
+into the labels input on backprop by default.
+
+See tf.nn.softmax_cross_entropy_with_logits_v2.
+
+======= EPILOG: Tue Jul 10 16:58:51 CEST 2018
+== Limits:   mem_free=8G
+== Usage:    cpu=00:29:51, mem=5512.84521 GB s, io=1.23266 GB, vmem=3.704G, maxvmem=3.704G
+== Duration: 00:03:35 (215 s)
+== Server name: helena4

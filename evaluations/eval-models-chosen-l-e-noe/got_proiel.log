@@ -1,0 +1,19 @@
+Loading UDPipe model: cat: 'got_proiel-*.cmd': No such file or directory
+test.sh: 7: test.sh: --predict: not found
+done.
+Traceback (most recent call last):
+  File "conll18_ud_eval.py", line 531, in <module>
+    main()
+  File "conll18_ud_eval.py", line 499, in main
+    evaluation = evaluate_wrapper(args)
+  File "conll18_ud_eval.py", line 483, in evaluate_wrapper
+    return evaluate(gold_ud, system_ud)
+  File "conll18_ud_eval.py", line 444, in evaluate
+    "".join(system_ud.characters[index:index + 20])
+__main__.UDError: The concatenation of tokens in gold file and in system file differ!
+First 20 differing characters in gold file: 'þataaukistwitoþjahpr' and system file: ''
+======= EPILOG: Wed Sep 19 12:08:04 CEST 2018
+== Limits:   mem_free=8G
+== Usage:    cpu=00:00:00, mem=0.00053 GB s, io=0.00297 GB, vmem=15.355M, maxvmem=15.355M
+== Duration: 00:00:01 (1 s)
+== Server name: belzebub

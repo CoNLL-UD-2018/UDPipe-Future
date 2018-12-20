@@ -1,0 +1,19 @@
+Job resources: hard resource_list:         gpu=1,gpu_cc_min3.5=1,mem_free=8G
+Assigned GPUs:  0
+Assigned GPUs in detail:  0:3.5
+80.97 UAS=88.74 LAS=85.74 MLAS=77.29 BLEX=79.88 UPOS=96.32 XPOS=98.81 UFeats=96.07 AllTags=95.13 Lemmas=96.75
+Metric     | Precision |    Recall |  F1 Score | AligndAcc
+-----------+-----------+-----------+-----------+-----------
+Tokens     |     99.73 |     99.65 |     99.69 |
+Sentences  |     95.33 |     93.27 |     94.29 |
+Words      |     98.55 |     99.06 |     98.81 |
+UPOS       |     96.07 |     96.57 |     96.32 |     97.48
+XPOS       |     98.55 |     99.06 |     98.81 |    100.00
+UFeats     |     95.82 |     96.32 |     96.07 |     97.23
+AllTags    |     94.89 |     95.38 |     95.13 |     96.28
+Lemmas     |     96.51 |     97.01 |     96.75 |     97.92
+UAS        |     88.51 |     88.97 |     88.74 |     89.81
+LAS        |     85.51 |     85.96 |     85.74 |     86.77
+CLAS       |     82.92 |     82.08 |     82.49 |     82.57
+MLAS       |     77.69 |     76.90 |     77.29 |     77.36
+BLEX       |     80.29 |     79.48 |     79.88 |     79.95

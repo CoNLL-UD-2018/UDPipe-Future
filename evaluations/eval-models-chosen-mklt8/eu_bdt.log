@@ -1,0 +1,15 @@
+Loading UDPipe model: done.
+WARNING:tensorflow:From /lnet/spec/work/people/straka/repos/conll2018_udpipe/venv-cpumkl/lib/python3.6/site-packages/tensorflow/python/ops/losses/losses_impl.py:691: softmax_cross_entropy_with_logits (from tensorflow.python.ops.nn_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+
+Future major versions of TensorFlow will allow gradients to flow
+into the labels input on backprop by default.
+
+See tf.nn.softmax_cross_entropy_with_logits_v2.
+
+Prediction of 24377 words took 63.690911054611206 wall time and 1914.113565888 process time
+======= EPILOG: Tue Jul 10 16:58:07 CEST 2018
+== Limits:   mem_free=8G
+== Usage:    cpu=00:15:10, mem=918.58071 GB s, io=0.41641 GB, vmem=1.146G, maxvmem=1.146G
+== Duration: 00:01:21 (81 s)
+== Server name: achilles2

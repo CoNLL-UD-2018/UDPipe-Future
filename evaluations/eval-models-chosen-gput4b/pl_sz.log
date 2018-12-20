@@ -1,0 +1,21 @@
+Loading UDPipe model: done.
+2018-07-10 14:47:41.925255: I tensorflow/core/platform/cpu_feature_guard.cc:137] Your CPU supports instructions that this TensorFlow binary was not compiled to use: SSE4.1 SSE4.2 AVX AVX2 FMA
+2018-07-10 14:47:44.720381: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1105] Found device 0 with properties: 
+name: GeForce GTX 1080 Ti major: 6 minor: 1 memoryClockRate(GHz): 1.582
+pciBusID: 0000:07:00.0
+totalMemory: 10.92GiB freeMemory: 10.76GiB
+2018-07-10 14:47:44.720526: I tensorflow/core/common_runtime/gpu/gpu_device.cc:1195] Creating TensorFlow device (/device:GPU:0) -> (device: 0, name: GeForce GTX 1080 Ti, pci bus id: 0000:07:00.0, compute capability: 6.1)
+WARNING:tensorflow:From /lnet/spec/work/people/straka/repos/conll2018_udpipe/venv/lib/python3.6/site-packages/tensorflow/python/ops/losses/losses_impl.py:691: softmax_cross_entropy_with_logits (from tensorflow.python.ops.nn_ops) is deprecated and will be removed in a future version.
+Instructions for updating:
+
+Future major versions of TensorFlow will allow gradients to flow
+into the labels input on backprop by default.
+
+See tf.nn.softmax_cross_entropy_with_logits_v2.
+
+Prediction of 10811 words took 4.761801242828369 wall time and 11.398865209 process time
+======= EPILOG: Tue Jul 10 14:47:58 CEST 2018
+== Limits:   gpu=1,gpu_cc_min3.5=1,mem_free=8G
+== Usage:    cpu=00:00:02, mem=0.01313 GB s, io=0.00430 GB, vmem=34.457M, maxvmem=34.457M
+== Duration: 00:00:27 (27 s)
+== Server name: dll4
