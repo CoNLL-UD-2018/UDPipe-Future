@@ -4,7 +4,7 @@ import tensorflow as tf
 import dependency_decoding
 
 import conll18_ud_eval
-import ud_dataset2
+import ud_dataset
 
 class Network:
     METRICS = ["UPOS", "XPOS", "UFeats", "AllTags", "Lemmas", "UAS", "LAS", "CLAS", "MLAS", "BLEX"]
@@ -395,12 +395,12 @@ if __name__ == "__main__":
         args.embeddings_data = np.load("{}.embeddings.npy".format(args.embeddings))
         args.embeddings_size = len(args.embeddings_data[0])
 
-    root_factors = [ud_dataset2.UDDataset.FORMS]
-    train = ud_dataset2.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
+    root_factors = [ud_dataset.UDDataset.FORMS]
+    train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
                                  embeddings=args.embeddings_words if args.embeddings else None)
-    dev_udpipe = ud_dataset2.UDDataset("{}-ud-dev-udpipe.conllu".format(args.basename), root_factors,
+    dev_udpipe = ud_dataset.UDDataset("{}-ud-dev-udpipe.conllu".format(args.basename), root_factors,
                                       train=train, shuffle_batches=False)
-    test_udpipe = ud_dataset2.UDDataset("{}-ud-test-udpipe.conllu".format(args.basename), root_factors,
+    test_udpipe = ud_dataset.UDDataset("{}-ud-test-udpipe.conllu".format(args.basename), root_factors,
                                        train=train, shuffle_batches=False)
 
     # Construct the network
@@ -430,7 +430,7 @@ if __name__ == "__main__":
     if args.predict:
         if args.predict_save_checkpoint:
             network.saver_inference.save(network.session, args.predict_save_checkpoint, write_meta_graph=False)
-        test = ud_dataset2.UDDataset(args.predict_input, root_factors, train=train, shuffle_batches=False)
+        test = ud_dataset.UDDataset(args.predict_input, root_factors, train=train, shuffle_batches=False)
         conllu = network.predict(test, False, args)
         print(conllu, end="", file=open(args.predict_output, "w", encoding="utf-8") if args.predict_output else sys.stdout)
         exit(0)
