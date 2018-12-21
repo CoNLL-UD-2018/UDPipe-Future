@@ -174,7 +174,6 @@ class Network:
 
             # Pretrain saver
             self.saver_inference = tf.train.Saver(max_to_keep=1)
-            self.saver_inference_best = tf.train.Saver(max_to_keep=1)
             if predict_only: return
 
             # Training
@@ -353,7 +352,6 @@ if __name__ == "__main__":
     parser.add_argument("--predict", default=False, action="store_true", help="Only predict.")
     parser.add_argument("--predict_input", default=None, type=str, help="Input to prediction.")
     parser.add_argument("--predict_output", default=None, type=str, help="Output to prediction.")
-    parser.add_argument("--predict_save_checkpoint", default=None, type=str, help="Save checkpoint during prediction.")
     parser.add_argument("--rnn_cell", default="LSTM", type=str, help="RNN cell type.")
     parser.add_argument("--rnn_cell_dim", default=512, type=int, help="RNN cell dimension.")
     parser.add_argument("--rnn_layers", default=2, type=int, help="RNN layers.")
@@ -404,26 +402,10 @@ if __name__ == "__main__":
                       len(train.factors[train.DEPREL].words), predict_only=args.predict)
 
     if args.checkpoint:
-        checkpoints = args.checkpoint.split(";")
         saver = network.saver_train if args.predict is None else network.saver_inference
-        saver.restore(network.session, checkpoints[0])
-        if checkpoints[1:]:
-            tmp = Network(threads=1)
-            tmp.construct(args, len(train.factors[train.FORMS].words), len(train.factors[train.FORMS].alphabet),
-                          dict((tag, len(train.factors[train.FACTORS_MAP[tag]].words)) for tag in args.tags),
-                          len(train.factors[train.DEPREL].words), predict_only=True)
-            for checkpoint in checkpoints[1:]:
-                tmp.saver_inference.restore(tmp.session, checkpoint)
-                for i, tmp_variable in enumerate(tmp.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)):
-                    variable = network.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)[i]
-                    variable.load(variable.eval(network.session) + tmp_variable.eval(tmp.session), network.session)
-            del tmp
-            for variable in network.session.graph.get_collection(tf.GraphKeys.GLOBAL_VARIABLES):
-                variable.load(variable.eval(network.session) / len(checkpoints), network.session)
+        saver.restore(network.session, args.checkpoint)
 
     if args.predict:
-        if args.predict_save_checkpoint:
-            network.saver_inference.save(network.session, args.predict_save_checkpoint, write_meta_graph=False)
         test = ud_dataset.UDDataset(args.predict_input, root_factors, train=train, shuffle_batches=False)
         conllu = network.predict(test, False, args)
         print(conllu, end="", file=open(args.predict_output, "w", encoding="utf-8") if args.predict_output else sys.stdout)
@@ -439,7 +421,6 @@ if __name__ == "__main__":
 
     dev_conllu = conll18_ud_eval.load_conllu_file("{}-ud-dev.conllu".format(args.basename))
     test_conllu = conll18_ud_eval.load_conllu_file("{}-ud-test.conllu".format(args.basename))
-    dev_best = 0
     for i, (epochs, learning_rate) in enumerate(args.epochs):
         for epoch in range(epochs):
             network.train_epoch(train, learning_rate, args)
@@ -453,10 +434,4 @@ if __name__ == "__main__":
             print("Test, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
 
             #network.saver_train.save(network.session, "{}/checkpoint".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
-            #if dev_accuracy > dev_best:
-                #network.saver_inference_best.save(network.session, "{}/checkpoint-inference-best".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
-            dev_best = max(dev_best, dev_accuracy)
-
-            #if epoch + 1 == epochs or (i == len(args.epochs) - 1 and (epoch + 10 == epochs or epoch + 5 >= epochs)):
-            #    network.saver_inference.save(network.session, "{}/checkpoint-inference-last".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
-    network.saver_inference.save(network.session, "{}/checkpoint-inference-last".format(args.logdir), global_step=network.global_step, write_meta_graph=False)
+    network.saver_inference.save(network.session, "{}/checkpoint-inference-last".format(args.logdir), write_meta_graph=False)
