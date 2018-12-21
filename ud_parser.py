@@ -345,6 +345,7 @@ if __name__ == "__main__":
     parser.add_argument("--dropout", default=0.5, type=float, help="Dropout")
     parser.add_argument("--embeddings", default=None, type=str, help="External embeddings to use.")
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
+    parser.add_argument("--exp", default=None, type=str, help="Experiment name.")
     parser.add_argument("--label_smoothing", default=0.03, type=float, help="Label smoothing.")
     parser.add_argument("--parse", default=1, type=int, help="Parse.")
     parser.add_argument("--parser_layers", default=1, type=int, help="Parser layers.")
@@ -365,12 +366,15 @@ if __name__ == "__main__":
     parser.add_argument("--word_dropout", default=0.2, type=float, help="Word dropout")
     args = parser.parse_args()
 
+    if args.exp is None:
+        args.exp = "{}-{}".format(os.path.basename(__file__), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
+
     # Create logdir name
-    args.logdir = "logs/{}-{}-{}".format(
-        os.path.basename(__file__),
-        datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"),
+    do_not_log_prefixes = {"exp", "predict", "tags", "threads"}
+    args.logdir = "logs/{}-{}".format(
+        args.exp,
         ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), re.sub("^.*/", "", value) if type(value) == str else value)
-                  for key, value in sorted(vars(args).items()) if not key.startswith("predict")))
+                  for key, value in sorted(vars(args).items()) if key not in do_not_log_prefixes))
     )
     if not args.predict and not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
