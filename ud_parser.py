@@ -100,9 +100,6 @@ class Network:
                     loss += tf.losses.softmax_cross_entropy(gold_labels, output_layer, weights=weights)
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.tags[tag], output_layer, weights=weights)
-                if args.confidence_penalty:
-                    loss += -tf.reduce_mean(args.confidence_penalty * tf.distributions.Categorical(
-                        logits=tf.boolean_mask(output_layer, tf.sequence_mask(self.sentence_lens))).entropy())
 
             # Trees
             if args.parse:
@@ -147,9 +144,6 @@ class Network:
                     loss += tf.losses.softmax_cross_entropy(gold_labels, heads, weights=weights)
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.heads, heads, weights=weights)
-                if args.confidence_penalty:
-                    loss += -tf.reduce_mean(args.confidence_penalty * tf.distributions.Categorical(
-                        logits=tf.boolean_mask(heads, tf.sequence_mask(self.sentence_lens))).entropy())
 
                 # Deprels
                 deprel_deps = tf.layers.dropout(tf.layers.dense(hidden_layer[:, 1:], args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
@@ -177,9 +171,6 @@ class Network:
                     loss += tf.losses.softmax_cross_entropy(gold_labels, head_deprels, weights=weights)
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.deprels, head_deprels, weights=weights)
-                if args.confidence_penalty:
-                    loss += -tf.reduce_mean(args.confidence_penalty * tf.distributions.Categorical(
-                        logits=tf.boolean_mask(head_deprels, tf.sequence_mask(self.sentence_lens))).entropy())
 
             # Pretrain saver
             self.saver_inference = tf.train.Saver(max_to_keep=1)
@@ -351,7 +342,6 @@ if __name__ == "__main__":
     parser.add_argument("--char_dropout", default=0, type=float, help="Character dropout")
     parser.add_argument("--checkpoint", default="", type=str, help="Checkpoint.")
     parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
-    parser.add_argument("--confidence_penalty", default=None, type=float, help="Confidence penalty weight.")
     parser.add_argument("--dropout", default=0.5, type=float, help="Dropout")
     parser.add_argument("--embeddings", default=None, type=str, help="External embeddings to use.")
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
