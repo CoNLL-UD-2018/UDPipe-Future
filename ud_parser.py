@@ -53,9 +53,14 @@ class Network:
             _, (state_fwd, state_bwd) = tf.nn.bidirectional_dynamic_rnn(
                 tf.nn.rnn_cell.GRUCell(args.cle_dim), tf.nn.rnn_cell.GRUCell(args.cle_dim),
                 characters_embedded, sequence_length=self.charseq_lens, dtype=tf.float32)
-            cle = state_fwd + state_bwd
+            cle = tf.concat([state_fwd, state_bwd], axis=1)
             cle_inputs = tf.nn.embedding_lookup(cle, self.charseq_ids)
-            inputs.append(cle_inputs)
+            # If CLE dim is half WE dim, we add them together, which gives
+            # better results; otherwise we concatenate CLE and WE.
+            if 2 * args.cle_dim == args.we_dim:
+                inputs[-1] += cle_inputs
+            else:
+                inputs.append(cle_inputs)
 
             # Pretrained embeddings
             if args.embeddings:
@@ -362,7 +367,7 @@ if __name__ == "__main__":
     parser.add_argument("--tags", default="UPOS,XPOS,FEATS,LEMMAS", type=str, help="Tags.")
     parser.add_argument("--tag_layers", default=1, type=int, help="Additional tag layers.")
     parser.add_argument("--threads", default=4, type=int, help="Maximum number of threads to use.")
-    parser.add_argument("--we_dim", default=256, type=int, help="Word embedding dimension.")
+    parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
     parser.add_argument("--word_dropout", default=0.2, type=float, help="Word dropout")
     args = parser.parse_args()
 
