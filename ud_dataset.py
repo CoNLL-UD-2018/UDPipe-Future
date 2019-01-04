@@ -107,6 +107,7 @@ class UDDataset:
     MISC = 8
     FACTORS = 9
     EMBEDDINGS = 9
+    ELMO = 10
 
     FACTORS_MAP = {"FORMS": FORMS, "LEMMAS": LEMMAS, "UPOS": UPOS, "XPOS": XPOS, "FEATS": FEATS,
                    "HEAD": HEAD, "DEPREL": DEPREL, "DEPS": DEPS, "MISC": MISC}
@@ -129,7 +130,7 @@ class UDDataset:
                 self.charseqs = [[0], [1], [2]]
                 self.charseq_ids = []
 
-    def __init__(self, filename, root_factors=[], embeddings=None, train=None, shuffle_batches=True, max_sentences=None):
+    def __init__(self, filename, root_factors=[], embeddings=None, elmo=None, train=None, shuffle_batches=True, max_sentences=None):
         # Create factors
         self._factors = []
         for f in range(self.FACTORS):
@@ -145,6 +146,13 @@ class UDDataset:
         elif embeddings is not None:
             for i, word in enumerate(embeddings):
                 self._embeddings[word.lower()] = i + 1
+
+        # Load contextualized embeddings
+        self._elmo = []
+        if elmo:
+            with np.load(elmo) as elmo_file:
+                for _, value in elmo_file.items():
+                    self._elmo.append(value)
 
         # Load the sentences
         with open(filename, "r", encoding="utf-8") as file:
@@ -242,6 +250,11 @@ class UDDataset:
         self._shuffle_batches = shuffle_batches
         self._permutation = np.random.permutation(len(self._sentence_lens)) if self._shuffle_batches else np.arange(len(self._sentence_lens))
 
+        if elmo:
+            assert sentences == len(self._elmo)
+            for i in range(sentences):
+                assert self._sentence_lens[i] == len(self._elmo[i])
+
     @property
     def sentence_lens(self):
         return self._sentence_lens
@@ -249,6 +262,10 @@ class UDDataset:
     @property
     def factors(self):
         return self._factors
+
+    @property
+    def elmo_size(self):
+        return self._elmo[0].shape[1] if self._elmo else 0
 
     def epoch_finished(self):
         if len(self._permutation) == 0:
@@ -279,6 +296,13 @@ class UDDataset:
             for i in range(batch_size):
                 for j, string in enumerate(forms.strings[batch_perm[i]]):
                     batch_word_ids[-1][i, j] = self._embeddings.get(string.lower(), 0)
+
+        # Contextualized embeddings
+        if self._elmo:
+            batch_word_ids.append(np.zeros([batch_size, max_sentence_len + forms.with_root, self.elmo_size], np.float32))
+            for i in range(batch_size):
+                batch_word_ids[-1][i, forms.with_root:forms.with_root + len(self._elmo[batch_perm[i]])] = \
+                    self._elmo[batch_perm[i]]
 
         # Character-level data
         batch_charseq_ids, batch_charseqs, batch_charseq_lens = [], [], []

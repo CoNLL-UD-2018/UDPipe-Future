@@ -26,6 +26,7 @@ class Network:
             self.charseq_lens = tf.placeholder(tf.int32, [None])
             self.charseq_ids = tf.placeholder(tf.int32, [None, None])
             if args.embeddings: self.embeddings = tf.placeholder(tf.float32, [None, None, args.embeddings_size])
+            if args.elmo_size: self.elmo = tf.placeholder(tf.float32, [None, None, args.elmo_size])
             self.tags = dict((tag, tf.placeholder(tf.int32, [None, None])) for tag in args.tags)
             self.heads = tf.placeholder(tf.int32, [None, None])
             self.deprels = tf.placeholder(tf.int32, [None, None])
@@ -65,6 +66,10 @@ class Network:
             # Pretrained embeddings
             if args.embeddings:
                 inputs.append(self.embeddings)
+
+            # Contextualized embeddings
+            if args.elmo_size:
+                inputs.append(self.elmo)
 
             # All inputs done
             inputs = tf.concat(inputs, axis=2)
@@ -254,6 +259,8 @@ class Network:
                             if word_ids[train.EMBEDDINGS][i, j]:
                                 embeddings[i, j] = args.embeddings_data[word_ids[train.EMBEDDINGS][i, j] - 1]
                     feeds[self.embeddings] = embeddings
+                if args.elmo_size:
+                    feeds[self.elmo] = word_ids[train.ELMO]
                 for tag in args.tags: feeds[self.tags[tag]] = word_ids[train.FACTORS_MAP[tag]]
                 if args.parse:
                     feeds[self.heads] = word_ids[train.HEAD]
@@ -281,6 +288,8 @@ class Network:
                         if word_ids[train.EMBEDDINGS][i, j]:
                             embeddings[i, j] = args.embeddings_data[word_ids[train.EMBEDDINGS][i, j] - 1]
                 feeds[self.embeddings] = embeddings
+            if args.elmo_size:
+                feeds[self.elmo] = word_ids[train.ELMO]
             if evaluating:
                 for tag in args.tags: feeds[self.tags[tag]] = word_ids[train.FACTORS_MAP[tag]]
                 if args.parse:
@@ -351,6 +360,7 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", default="", type=str, help="Checkpoint.")
     parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--dropout", default=0.5, type=float, help="Dropout")
+    parser.add_argument("--elmo", default=None, type=str, help="External contextualized embeddings to use.")
     parser.add_argument("--embeddings", default=None, type=str, help="External embeddings to use.")
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
     parser.add_argument("--exp", default=None, type=str, help="Experiment name.")
@@ -399,11 +409,13 @@ if __name__ == "__main__":
 
     root_factors = [ud_dataset.UDDataset.FORMS]
     train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
-                                 embeddings=args.embeddings_words if args.embeddings else None)
-    dev_udpipe = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), root_factors,
-                                      train=train, shuffle_batches=False)
-    test_udpipe = ud_dataset.UDDataset("{}-ud-test.conllu".format(args.basename), root_factors,
-                                       train=train, shuffle_batches=False)
+                                 embeddings=args.embeddings_words if args.embeddings else None,
+                                 elmo=args.elmo + "-train.npz" if args.elmo else None)
+    dev = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
+                               elmo=args.elmo + "-dev.npz" if args.elmo else None)
+    test = ud_dataset.UDDataset("{}-ud-test.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
+                                elmo=args.elmo + "-test.npz" if args.elmo else None)
+    args.elmo_size = train.elmo_size
 
     # Construct the network
     network = Network(threads=args.threads)
