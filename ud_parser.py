@@ -153,10 +153,18 @@ class Network:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.heads, heads, weights=weights)
 
                 # Deprels
-                deprel_deps = tf.layers.dropout(tf.layers.dense(hidden_layer[:, 1:], args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+                self.deprel_hidden_layer = tf.identity(hidden_layer)
+                self.deprel_heads = tf.identity(self.heads)
+
+                deprel_deps = tf.layers.dropout(tf.layers.dense(self.deprel_hidden_layer[:, 1:], args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
                 for _ in range(args.parser_layers - 1):
                     deprel_deps += tf.layers.dropout(tf.layers.dense(deprel_deps, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
-                deprel_roots = tf.layers.dropout(tf.layers.dense(hidden_layer, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
+
+                deprel_indices = tf.stack([
+                    tf.tile(tf.expand_dims(tf.range(tf.shape(self.deprel_heads)[0]), axis=1), multiples=[1, tf.shape(self.deprel_heads)[1]]),
+                    self.deprel_heads], axis=2)
+                deprel_roots = tf.gather_nd(self.deprel_hidden_layer, deprel_indices, )
+                deprel_roots = tf.layers.dropout(tf.layers.dense(deprel_roots, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
                 for _ in range(args.parser_layers - 1):
                     deprel_roots += tf.layers.dropout(tf.layers.dense(deprel_roots, args.parser_deprel_dim, activation=tf.nn.tanh), rate=args.dropout, training=self.is_training)
 
@@ -165,19 +173,15 @@ class Network:
                 deprel_biaffine = tf.get_variable("deprel_biaffine", [args.parser_deprel_dim, num_deprels * args.parser_deprel_dim], dtype=tf.float32, initializer=tf.zeros_initializer)
 
                 deprels = tf.reshape(tf.matmul(tf.reshape(deprel_deps, [-1, args.parser_deprel_dim]) + deprel_deps_bias, deprel_biaffine),
-                                     [tf.shape(hidden_layer)[0], -1, args.parser_deprel_dim])
-                deprels = tf.reshape(tf.matmul(deprels, deprel_roots + deprel_roots_bias, transpose_b=True),
-                                     [tf.shape(hidden_layer)[0], max_words, num_deprels, max_words + 1])
-                deprels = tf.transpose(deprels, [0, 1, 3, 2])
-                self.predictions_deprel = tf.argmax(deprels, axis=3, output_type=tf.int32)
-                deprel_mask = tf.one_hot(self.heads, max_words + 1)
-                head_deprels = tf.reduce_sum(deprels * tf.expand_dims(tf.one_hot(self.heads, max_words + 1), axis=-1), axis=2)
+                                     [tf.shape(self.deprel_hidden_layer)[0], -1, num_deprels, args.parser_deprel_dim])
+                deprels = tf.squeeze(tf.matmul(deprels, tf.expand_dims(deprel_roots + deprel_roots_bias, axis=3)), axis=3)
+                self.predictions_deprel = tf.argmax(deprels, axis=2, output_type=tf.int32)
                 if args.label_smoothing:
                     gold_labels = tf.one_hot(self.deprels, num_deprels) * (1 - args.label_smoothing)
                     gold_labels += args.label_smoothing / num_deprels
-                    loss += tf.losses.softmax_cross_entropy(gold_labels, head_deprels, weights=weights)
+                    loss += tf.losses.softmax_cross_entropy(gold_labels, deprels, weights=weights)
                 else:
-                    loss += tf.losses.sparse_softmax_cross_entropy(self.deprels, head_deprels, weights=weights)
+                    loss += tf.losses.sparse_softmax_cross_entropy(self.deprels, deprels, weights=weights)
 
             # Pretrain saver
             self.saver_inference = tf.train.Saver(max_to_keep=1)
@@ -206,7 +210,7 @@ class Network:
                     heads_acc = tf.reduce_sum(tf.cast(tf.equal(self.heads, tf.argmax(heads, axis=-1, output_type=tf.int32)),
                                                       tf.float32) * weights) / weights_sum
                     self.summaries["train"].extend([tf.contrib.summary.scalar("train/heads_acc", heads_acc)])
-                    deprels_acc = tf.reduce_sum(tf.cast(tf.equal(self.deprels, tf.argmax(head_deprels, axis=-1, output_type=tf.int32)),
+                    deprels_acc = tf.reduce_sum(tf.cast(tf.equal(self.deprels, tf.argmax(deprels, axis=-1, output_type=tf.int32)),
                                                         tf.float32) * weights) / weights_sum
                     self.summaries["train"].extend([tf.contrib.summary.scalar("train/deprels_acc", deprels_acc)])
 
@@ -284,30 +288,29 @@ class Network:
                     feeds[self.deprels] = word_ids[train.DEPREL]
 
             targets = [self.predictions]
-            if args.parse: targets.extend([self.heads_logs, self.predictions_deprel])
+            if args.parse: targets.extend([self.heads_logs, self.deprel_hidden_layer])
             if evaluating: targets.append(self.update_loss)
             predictions, *other_values = self.session.run(targets, feeds)
-            if args.parse: heads, deprels, *_ = other_values
+            if args.parse: prior_heads, deprel_hidden_layer, *_ = other_values
+
+            if args.parse:
+                heads = np.zeros(prior_heads.shape[:2], dtype=np.int32)
+                for i in range(len(sentence_lens)):
+                    padded_heads = np.pad(prior_heads[i][:sentence_lens[i], :sentence_lens[i] + 1].astype(np.float),
+                                          ((1, 0), (0, 0)), mode="constant")
+                    padded_heads[:, 0] = np.nan
+                    padded_heads[1 + np.argmax(prior_heads[i][:sentence_lens[i], 0]), 0] = 0
+                    chosen_heads, _ = dependency_decoding.chu_liu_edmonds(padded_heads)
+                    heads[i, :sentence_lens[i]] = chosen_heads[1:]
+                deprels = self.session.run(self.predictions_deprel,
+                                           {self.is_training: False, self.deprel_hidden_layer: deprel_hidden_layer, self.deprel_heads: heads})
 
             for i in range(len(sentence_lens)):
                 overrides = [None] * dataset.FACTORS
                 for tag in args.tags: overrides[dataset.FACTORS_MAP[tag]] = predictions[tag][i]
                 if args.parse:
-                    padded_heads = np.pad(heads[i][:sentence_lens[i], :sentence_lens[i] + 1].astype(np.float), ((1, 0), (0, 0)), mode="constant")
-                    roots, _ = dependency_decoding.chu_liu_edmonds(padded_heads)
-                    if np.count_nonzero(roots) != len(roots) - 1:
-                        best_score = None
-                        padded_heads[:, 0] = np.nan
-                        for r in range(len(roots)):
-                            if roots[r] == 0:
-                                padded_heads[r, 0] = heads[i][r - 1, 0]
-                                current_roots, current_score = dependency_decoding.chu_liu_edmonds(padded_heads)
-                                padded_heads[r, 0] = np.nan
-                                if best_score is None or current_score > best_score: best_score, best_roots = current_score, current_roots
-                        roots = best_roots
-
-                    overrides[dataset.HEAD] = roots[1:]
-                    overrides[dataset.DEPREL] = deprels[i][range(len(roots) - 1), roots[1:]]
+                    overrides[dataset.HEAD] = heads[i]
+                    overrides[dataset.DEPREL] = deprels[i]
                 dataset.write_sentence(conllu, sentences, overrides)
                 sentences += 1
 
