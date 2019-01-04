@@ -378,11 +378,11 @@ if __name__ == "__main__":
         args.exp = "{}-{}".format(os.path.basename(__file__), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
 
     # Create logdir name
-    do_not_log_prefixes = {"exp", "predict", "tags", "threads"}
+    do_not_log = {"exp", "predict", "predict_input", "predict_output", "tags", "threads"}
     args.logdir = "logs/{}-{}".format(
         args.exp,
         ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), re.sub("^.*/", "", value) if type(value) == str else value)
-                  for key, value in sorted(vars(args).items()) if key not in do_not_log_prefixes))
+                  for key, value in sorted(vars(args).items()) if key not in do_not_log))
     )
     if not args.predict and not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
