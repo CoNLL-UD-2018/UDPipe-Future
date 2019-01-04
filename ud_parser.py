@@ -334,7 +334,6 @@ if __name__ == "__main__":
     import argparse
     import datetime
     import os
-    import pickle
     import sys
     import re
 
@@ -392,10 +391,10 @@ if __name__ == "__main__":
 
     # Load the data
     if args.embeddings:
-        with open("{}.words".format(args.embeddings), mode="rb") as words_file:
-            args.embeddings_words = pickle.load(words_file)
-        args.embeddings_data = np.load("{}.embeddings.npy".format(args.embeddings))
-        args.embeddings_size = len(args.embeddings_data[0])
+        with np.load(args.embeddings) as embeddings_npz:
+            args.embeddings_words = embeddings_npz["words"]
+            args.embeddings_data = embeddings_npz["embeddings"]
+            args.embeddings_size = args.embeddings_data.shape[1]
 
     root_factors = [ud_dataset.UDDataset.FORMS]
     train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
