@@ -34,7 +34,7 @@ class Network:
 
             # RNN Cell
             if args.rnn_cell == "LSTM":
-                rnn_cell = tf.nn.rnn_cell.BasicLSTMCell
+                rnn_cell = tf.nn.rnn_cell.LSTMCell
             elif args.rnn_cell == "GRU":
                 rnn_cell = tf.nn.rnn_cell.GRUCell
             else:
