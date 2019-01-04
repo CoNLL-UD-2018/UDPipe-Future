@@ -218,7 +218,7 @@ class Network:
                 self.current_loss, self.update_loss = tf.metrics.mean(loss, weights=weights_sum)
                 self.reset_metrics = tf.variables_initializer(tf.get_collection(tf.GraphKeys.METRIC_VARIABLES))
                 self.metrics = dict((metric, tf.placeholder(tf.float32, [])) for metric in self.METRICS)
-                for dataset in ["dev", "dev-udpipe", "test", "test-udpipe"]:
+                for dataset in ["dev", "test"]:
                     self.summaries[dataset] = [tf.contrib.summary.scalar(dataset + "/loss", self.current_loss)]
                     for metric in self.METRICS:
                         self.summaries[dataset].append(tf.contrib.summary.scalar("{}/{}".format(dataset, metric),
@@ -400,9 +400,9 @@ if __name__ == "__main__":
     root_factors = [ud_dataset.UDDataset.FORMS]
     train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
                                  embeddings=args.embeddings_words if args.embeddings else None)
-    dev_udpipe = ud_dataset.UDDataset("{}-ud-dev-udpipe.conllu".format(args.basename), root_factors,
+    dev_udpipe = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), root_factors,
                                       train=train, shuffle_batches=False)
-    test_udpipe = ud_dataset.UDDataset("{}-ud-test-udpipe.conllu".format(args.basename), root_factors,
+    test_udpipe = ud_dataset.UDDataset("{}-ud-test.conllu".format(args.basename), root_factors,
                                        train=train, shuffle_batches=False)
 
     # Construct the network
@@ -435,11 +435,11 @@ if __name__ == "__main__":
         for epoch in range(epochs):
             network.train_epoch(train, learning_rate, args)
 
-            dev_accuracy, metrics = network.evaluate("dev-udpipe", dev_udpipe, dev_conllu, args)
+            dev_accuracy, metrics = network.evaluate("dev", dev, dev_conllu, args)
             metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
             print("Dev, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
 
-            test_accuracy, metrics = network.evaluate("test-udpipe", test_udpipe, test_conllu, args)
+            test_accuracy, metrics = network.evaluate("test", test, test_conllu, args)
             metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
             print("Test, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
 
