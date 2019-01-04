@@ -57,12 +57,14 @@ class Network:
             cle_inputs = tf.nn.embedding_lookup(cle, self.charseq_ids)
             inputs.append(cle_inputs)
 
-            # Embeddings
+            # Pretrained embeddings
             if args.embeddings:
                 inputs.append(self.embeddings)
+
+            # All inputs done
             inputs = tf.concat(inputs, axis=2)
 
-            # RNN layers
+            # Shared RNN layers
             hidden_layer = tf.layers.dropout(inputs, rate=args.dropout, training=self.is_training)
             for i in range(args.rnn_layers):
                 (hidden_layer_fwd, hidden_layer_bwd), _ = tf.nn.bidirectional_dynamic_rnn(
@@ -73,7 +75,7 @@ class Network:
                 hidden_layer = tf.layers.dropout(hidden_layer_fwd + hidden_layer_bwd, rate=args.dropout, training=self.is_training)
                 if i: hidden_layer += previous
 
-            # Tags
+            # Tagger
             loss = 0
             weights = tf.sequence_mask(self.sentence_lens, dtype=tf.float32)
             weights_sum = tf.reduce_sum(weights)
@@ -101,7 +103,7 @@ class Network:
                 else:
                     loss += tf.losses.sparse_softmax_cross_entropy(self.tags[tag], output_layer, weights=weights)
 
-            # Trees
+            # Parsing
             if args.parse:
                 max_words = tf.reduce_max(self.sentence_lens)
 
