@@ -150,9 +150,13 @@ class UDDataset:
         # Load contextualized embeddings
         self._elmo = []
         if elmo:
-            with np.load(elmo) as elmo_file:
-                for _, value in elmo_file.items():
-                    self._elmo.append(value)
+            for elmo_path in elmo.split(","):
+                with np.load(elmo_path) as elmo_file:
+                    for i, (_, value) in enumerate(elmo_file.items()):
+                        if i >= len(self._elmo): self._elmo.append(value)
+                        else: self._elmo[i] = np.concat([self._elmo[i], value], axis=1)
+                    assert i + 1 == len(self._elmo)
+        self._elmo_size = self._elmo[0].shape[1] if self._elmo else 0
 
         # Load the sentences
         with open(filename, "r", encoding="utf-8") as file:
@@ -250,7 +254,7 @@ class UDDataset:
         self._shuffle_batches = shuffle_batches
         self._permutation = np.random.permutation(len(self._sentence_lens)) if self._shuffle_batches else np.arange(len(self._sentence_lens))
 
-        if elmo:
+        if self._elmo:
             assert sentences == len(self._elmo)
             for i in range(sentences):
                 assert self._sentence_lens[i] == len(self._elmo[i])
@@ -265,7 +269,7 @@ class UDDataset:
 
     @property
     def elmo_size(self):
-        return self._elmo[0].shape[1] if self._elmo else 0
+        return self._elmo_size
 
     def epoch_finished(self):
         if len(self._permutation) == 0:

@@ -408,14 +408,22 @@ if __name__ == "__main__":
             args.embeddings_size = args.embeddings_data.shape[1]
 
     root_factors = [ud_dataset.UDDataset.FORMS]
-    train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
-                                 embeddings=args.embeddings_words if args.embeddings else None,
-                                 elmo=args.elmo + "-train.npz" if args.elmo else None)
-    dev = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
-                               elmo=args.elmo + "-dev.npz" if args.elmo else None)
-    test = ud_dataset.UDDataset("{}-ud-test.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
-                                elmo=args.elmo + "-test.npz" if args.elmo else None)
-    args.elmo_size = train.elmo_size
+    if args.predict:
+        train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
+                                     embeddings=args.embeddings_words if args.embeddings else None)
+        test = ud_dataset.UDDataset(args.predict_input, root_factors, train=train, shuffle_batches=False, elmo=args.elmo)
+    else:
+        train = ud_dataset.UDDataset("{}-ud-train.conllu".format(args.basename), root_factors,
+                                     embeddings=args.embeddings_words if args.embeddings else None,
+                                     elmo=re.sub("(?=,|$)", "-train.npz", args.elmo) if args.elmo else None)
+        if os.path.exists("{}-ud-dev.conllu".format(args.basename)):
+            dev = ud_dataset.UDDataset("{}-ud-dev.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
+                                       elmo=re.sub("(?=,|$)", "-dev.npz", args.elmo) if args.elmo else None)
+        else:
+            dev = None
+        test = ud_dataset.UDDataset("{}-ud-test.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
+                                    elmo=re.sub("(?=,|$)", "-test.npz", args.elmo) if args.elmo else None)
+    args.elmo_size = test.elmo_size
 
     # Construct the network
     network = Network(threads=args.threads)
@@ -428,7 +436,6 @@ if __name__ == "__main__":
         saver.restore(network.session, args.checkpoint)
 
     if args.predict:
-        test = ud_dataset.UDDataset(args.predict_input, root_factors, train=train, shuffle_batches=False)
         conllu = network.predict(test, False, args)
         print(conllu, end="", file=open(args.predict_output, "w", encoding="utf-8") if args.predict_output else sys.stdout)
         exit(0)
@@ -441,15 +448,17 @@ if __name__ == "__main__":
     print("Parsing with args:", "\n".join(("{}: {}".format(key, value) for key, value in sorted(vars(args).items())
                                            if key not in ["embeddings_data", "embeddings_words"])), flush=True)
 
-    dev_conllu = conll18_ud_eval.load_conllu_file("{}-ud-dev.conllu".format(args.basename))
+    if dev:
+        dev_conllu = conll18_ud_eval.load_conllu_file("{}-ud-dev.conllu".format(args.basename))
     test_conllu = conll18_ud_eval.load_conllu_file("{}-ud-test.conllu".format(args.basename))
     for i, (epochs, learning_rate) in enumerate(args.epochs):
         for epoch in range(epochs):
             network.train_epoch(train, learning_rate, args)
 
-            dev_accuracy, metrics = network.evaluate("dev", dev, dev_conllu, args)
-            metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
-            print("Dev, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
+            if dev:
+                dev_accuracy, metrics = network.evaluate("dev", dev, dev_conllu, args)
+                metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
+                print("Dev, epoch {}, lr {}, {}".format(epoch + 1, learning_rate, metrics_log), file=log_file, flush=True)
 
             test_accuracy, metrics = network.evaluate("test", test, test_conllu, args)
             metrics_log = ", ".join(("{}: {:.2f}".format(metric, 100 * metrics[metric].f1) for metric in Network.METRICS))
