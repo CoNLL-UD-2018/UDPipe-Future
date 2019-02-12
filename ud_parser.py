@@ -377,6 +377,7 @@ if __name__ == "__main__":
     parser.add_argument("--rnn_layers", default=2, type=int, help="RNN layers.")
     parser.add_argument("--rnn_layers_parser", default=1, type=int, help="Parser RNN layers.")
     parser.add_argument("--rnn_layers_tagger", default=1, type=int, help="Tagger RNN layers.")
+    parser.add_argument("--seed", default=42, type=int, help="Initial random seed.")
     parser.add_argument("--tags", default="UPOS,XPOS,FEATS,LEMMAS", type=str, help="Tags.")
     parser.add_argument("--tag_layers", default=1, type=int, help="Additional tag layers.")
     parser.add_argument("--threads", default=4, type=int, help="Maximum number of threads to use.")
@@ -426,7 +427,7 @@ if __name__ == "__main__":
     args.elmo_size = test.elmo_size
 
     # Construct the network
-    network = Network(threads=args.threads)
+    network = Network(threads=args.threads, seed=args.seed)
     network.construct(args, len(train.factors[train.FORMS].words), len(train.factors[train.FORMS].alphabet),
                       dict((tag, len(train.factors[train.FACTORS_MAP[tag]].words)) for tag in args.tags),
                       len(train.factors[train.DEPREL].words), predict_only=args.predict)
