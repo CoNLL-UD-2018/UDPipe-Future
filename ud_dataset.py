@@ -154,7 +154,7 @@ class UDDataset:
                 with np.load(elmo_path) as elmo_file:
                     for i, (_, value) in enumerate(elmo_file.items()):
                         if i >= len(self._elmo): self._elmo.append(value)
-                        else: self._elmo[i] = np.concat([self._elmo[i], value], axis=1)
+                        else: self._elmo[i] = np.concatenate([self._elmo[i], value], axis=1)
                     assert i + 1 == len(self._elmo)
         self._elmo_size = self._elmo[0].shape[1] if self._elmo else 0
 
