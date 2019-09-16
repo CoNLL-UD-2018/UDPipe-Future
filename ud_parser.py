@@ -365,6 +365,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
     parser.add_argument("--exp", default=None, type=str, help="Experiment name.")
     parser.add_argument("--label_smoothing", default=0.03, type=float, help="Label smoothing.")
+    parser.add_argument("--logdir", default=None, type=str, help="Model and log directory.")
     parser.add_argument("--min_epoch_batches", default=300, type=int, help="Minimum number of batches per epoch.")
     parser.add_argument("--parse", default=1, type=int, help="Parse.")
     parser.add_argument("--parser_layers", default=1, type=int, help="Parser layers.")
@@ -388,14 +389,15 @@ if __name__ == "__main__":
     if args.exp is None:
         args.exp = "{}-{}".format(os.path.basename(__file__), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
 
-    # Create logdir name
-    do_not_log = {"exp", "predict", "predict_input", "predict_output", "tags", "threads"}
-    args.logdir = "logs/{}-{}".format(
-        args.exp,
-        ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), re.sub("^.*/", "", value) if type(value) == str else value)
-                  for key, value in sorted(vars(args).items()) if key not in do_not_log))
-    )
-    if not args.predict and not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
+    if args.logdir is None:
+        # Create logdir name
+        do_not_log = {"exp", "predict", "predict_input", "predict_output", "tags", "threads"}
+        args.logdir = "logs/{}-{}".format(
+            args.exp,
+            ",".join(("{}={}".format(re.sub("(.)[^_]*_?", r"\1", key), re.sub("^.*/", "", value) if type(value) == str else value)
+                      for key, value in sorted(vars(args).items()) if key not in do_not_log))
+        )
+        if not args.predict and not os.path.exists("logs"): os.mkdir("logs") # TF 1.6 will do this by itself
 
     # Postprocess args
     args.tags = args.tags.split(",")
