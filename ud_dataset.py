@@ -130,7 +130,7 @@ class UDDataset:
                 self.charseqs = [[0], [1], [2]]
                 self.charseq_ids = []
 
-    def __init__(self, filename, root_factors=[], embeddings=None, elmo=None, train=None, shuffle_batches=True, max_sentences=None):
+    def __init__(self, filename, root_factors=[], embeddings=None, elmo=None, train=None, shuffle_batches=True, max_sentence_len=None, max_sentences=None):
         # Create factors
         self._factors = []
         for f in range(self.FACTORS):
@@ -153,6 +153,7 @@ class UDDataset:
             for elmo_path in elmo.split(","):
                 with np.load(elmo_path) as elmo_file:
                     for i, (_, value) in enumerate(elmo_file.items()):
+                        if max_sentence_len: value = value[:max_sentence_len]
                         if i >= len(self._elmo): self._elmo.append(value)
                         else: self._elmo[i] = np.concatenate([self._elmo[i], value], axis=1)
                     assert i + 1 == len(self._elmo)
@@ -174,6 +175,9 @@ class UDDataset:
                             while len(self._extras) <= len(self._factors[0].word_ids): self._extras.append([])
                             if not len(self._extras[-1]): self._extras[-1].append("")
                         self._extras[-1][-1] += ("\n" if self._extras[-1][-1] else "") + line
+                        continue
+
+                    if max_sentence_len and in_sentence and len(self._factors[0].strings[-1]) - self._factors[0].with_root >= max_sentence_len:
                         continue
 
                     columns = line.split("\t")[1:]
@@ -257,7 +261,7 @@ class UDDataset:
         if self._elmo:
             assert sentences == len(self._elmo)
             for i in range(sentences):
-                assert self._sentence_lens[i] == len(self._elmo[i])
+                assert self._sentence_lens[i] == len(self._elmo[i]), "{} {} {}".format(i, self._sentence_lens[i], len(self._elmo[i]))
 
     @property
     def sentence_lens(self):
