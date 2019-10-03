@@ -90,6 +90,7 @@ def _apply_lemma_rule(form, lemma_rule):
 
     for rule in casing.split("¦"):
         if rule == "↓0": continue # The lemma is lowercased initially
+        if not rule: continue # Empty lemma might generate empty casing rule
         case, offset = rule[0], int(rule[1:])
         lemma = lemma[:offset] + (lemma[offset:].upper() if case == "↑" else lemma[offset:].lower())
 
@@ -130,7 +131,7 @@ class UDDataset:
                 self.charseqs = [[0], [1], [2]]
                 self.charseq_ids = []
 
-    def __init__(self, filename, root_factors=[], embeddings=None, elmo=None, train=None, shuffle_batches=True, max_sentences=None):
+    def __init__(self, filename, root_factors=[], embeddings=None, elmo=None, train=None, shuffle_batches=True, max_sentence_len=None, max_sentences=None):
         # Create factors
         self._factors = []
         for f in range(self.FACTORS):
@@ -145,7 +146,7 @@ class UDDataset:
             self._embeddings = train._embeddings
         elif embeddings is not None:
             for i, word in enumerate(embeddings):
-                self._embeddings[word.lower()] = i + 1
+                self._embeddings[word] = i + 1
 
         # Load contextualized embeddings
         self._elmo = []
@@ -153,6 +154,7 @@ class UDDataset:
             for elmo_path in elmo.split(","):
                 with np.load(elmo_path) as elmo_file:
                     for i, (_, value) in enumerate(elmo_file.items()):
+                        if max_sentence_len: value = value[:max_sentence_len]
                         if i >= len(self._elmo): self._elmo.append(value)
                         else: self._elmo[i] = np.concatenate([self._elmo[i], value], axis=1)
                     assert i + 1 == len(self._elmo)
@@ -174,6 +176,9 @@ class UDDataset:
                             while len(self._extras) <= len(self._factors[0].word_ids): self._extras.append([])
                             if not len(self._extras[-1]): self._extras[-1].append("")
                         self._extras[-1][-1] += ("\n" if self._extras[-1][-1] else "") + line
+                        continue
+
+                    if max_sentence_len and in_sentence and len(self._factors[0].strings[-1]) - self._factors[0].with_root >= max_sentence_len:
                         continue
 
                     columns = line.split("\t")[1:]
@@ -257,7 +262,7 @@ class UDDataset:
         if self._elmo:
             assert sentences == len(self._elmo)
             for i in range(sentences):
-                assert self._sentence_lens[i] == len(self._elmo[i])
+                assert self._sentence_lens[i] == len(self._elmo[i]), "{} {} {}".format(i, self._sentence_lens[i], len(self._elmo[i]))
 
     @property
     def sentence_lens(self):
@@ -299,7 +304,7 @@ class UDDataset:
         if len(self._embeddings):
             for i in range(batch_size):
                 for j, string in enumerate(forms.strings[batch_perm[i]]):
-                    batch_word_ids[-1][i, j] = self._embeddings.get(string.lower(), 0)
+                    batch_word_ids[-1][i, j] = self._embeddings.get(string, 0) or self._embeddings.get(string.lower(), 0)
 
         # Contextualized embeddings
         if self._elmo:
