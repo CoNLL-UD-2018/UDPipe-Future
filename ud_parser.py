@@ -346,9 +346,6 @@ if __name__ == "__main__":
     import sys
     import re
 
-    # Fix random seed
-    np.random.seed(42)
-
     command_line = " ".join(sys.argv[1:])
 
     # Parse arguments
@@ -385,6 +382,9 @@ if __name__ == "__main__":
     parser.add_argument("--we_dim", default=512, type=int, help="Word embedding dimension.")
     parser.add_argument("--word_dropout", default=0.2, type=float, help="Word dropout")
     args = parser.parse_args()
+
+    # Fix random seed
+    np.random.seed(args.seed)
 
     if args.exp is None:
         args.exp = "{}-{}".format(os.path.basename(__file__), datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S"))
