@@ -408,7 +408,7 @@ if __name__ == "__main__":
 
     # Load the data
     if args.embeddings:
-        with np.load(args.embeddings) as embeddings_npz:
+        with np.load(args.embeddings, allow_pickle=True) as embeddings_npz:
             args.embeddings_words = embeddings_npz["words"]
             args.embeddings_data = embeddings_npz["embeddings"]
             args.embeddings_size = args.embeddings_data.shape[1]
