@@ -145,7 +145,7 @@ class UDDataset:
             self._embeddings = train._embeddings
         elif embeddings is not None:
             for i, word in enumerate(embeddings):
-                self._embeddings[word.lower()] = i + 1
+                self._embeddings[word] = i + 1
 
         # Load contextualized embeddings
         self._elmo = []
@@ -303,7 +303,7 @@ class UDDataset:
         if len(self._embeddings):
             for i in range(batch_size):
                 for j, string in enumerate(forms.strings[batch_perm[i]]):
-                    batch_word_ids[-1][i, j] = self._embeddings.get(string.lower(), 0)
+                    batch_word_ids[-1][i, j] = self._embeddings.get(string, 0) or self._embeddings.get(string.lower(), 0)
 
         # Contextualized embeddings
         if self._elmo:

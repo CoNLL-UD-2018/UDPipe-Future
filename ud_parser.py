@@ -361,7 +361,7 @@ if __name__ == "__main__":
     parser.add_argument("--cle_dim", default=256, type=int, help="Character-level embedding dimension.")
     parser.add_argument("--dropout", default=0.5, type=float, help="Dropout")
     parser.add_argument("--elmo", default=None, type=str, help="External contextualized embeddings to use.")
-    parser.add_argument("--embeddings", default=None, type=str, help="External lowercased embeddings to use.")
+    parser.add_argument("--embeddings", default=None, type=str, help="External embeddings to use.")
     parser.add_argument("--epochs", default="40:1e-3,20:1e-4", type=str, help="Epochs and learning rates.")
     parser.add_argument("--exp", default=None, type=str, help="Experiment name.")
     parser.add_argument("--label_smoothing", default=0.03, type=float, help="Label smoothing.")
