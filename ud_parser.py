@@ -90,6 +90,7 @@ class Network:
             weights = tf.sequence_mask(self.sentence_lens, dtype=tf.float32)
             weights_sum = tf.reduce_sum(weights)
             self.predictions = {}
+            self.prediction_probs = {}
             tag_hidden_layer = hidden_layer[:, 1:]
             for i in range(args.rnn_layers_tagger):
                 (hidden_layer_fwd, hidden_layer_bwd), _ = tf.nn.bidirectional_dynamic_rnn(
@@ -106,6 +107,7 @@ class Network:
                 if tag == "LEMMAS": tag_layer = tf.concat([tag_layer, cle_inputs[:, 1:]], axis=2)
                 output_layer = tf.layers.dense(tag_layer, num_tags[tag])
                 self.predictions[tag] = tf.argmax(output_layer, axis=2, output_type=tf.int32)
+                self.prediction_probs[tag] = tf.nn.softmax(output_layer, axis=2)
 
                 if args.label_smoothing:
                     gold_labels = tf.one_hot(self.tags[tag], num_tags[tag]) * (1 - args.label_smoothing) + args.label_smoothing / num_tags[tag]
@@ -150,6 +152,7 @@ class Network:
                                    [tf.shape(hidden_layer)[0], -1, args.rnn_cell_dim])
                 heads = tf.matmul(heads, head_roots + head_roots_bias, transpose_b=True)
                 self.heads_logs = tf.nn.log_softmax(heads)
+                self.heads_probs = tf.nn.softmax(heads)
                 if args.label_smoothing:
                     gold_labels = tf.one_hot(self.heads, max_words + 1) * (1 - args.label_smoothing)
                     gold_labels += args.label_smoothing / tf.to_float(max_words + 1)
@@ -181,6 +184,7 @@ class Network:
                                      [tf.shape(self.deprel_hidden_layer)[0], -1, num_deprels, args.parser_deprel_dim])
                 deprels = tf.squeeze(tf.matmul(deprels, tf.expand_dims(deprel_roots + deprel_roots_bias, axis=3)), axis=3)
                 self.predictions_deprel = tf.argmax(deprels, axis=2, output_type=tf.int32)
+                self.predictions_deprel_probs = tf.nn.softmax(deprels, axis=2)
                 if args.label_smoothing:
                     gold_labels = tf.one_hot(self.deprels, num_deprels) * (1 - args.label_smoothing)
                     gold_labels += args.label_smoothing / num_deprels
@@ -428,6 +432,78 @@ if __name__ == "__main__":
         test = ud_dataset.UDDataset("{}-ud-test.conllu".format(args.basename), root_factors, train=train, shuffle_batches=False,
                                     elmo=re.sub("(?=,|$)", "-test.npz", args.elmo) if args.elmo else None)
     args.elmo_size = test.elmo_size
+
+    # Ugly ensembling during prediction; should be refactored and merged with Network.predict
+    if args.predict and ";" in args.checkpoint:
+        networks = []
+        for checkpoint in args.checkpoint.split(";"):
+            networks.append(Network(threads=args.threads, seed=args.seed))
+            networks[-1].construct(args, len(train.factors[train.FORMS].words), len(train.factors[train.FORMS].alphabet),
+                                   dict((tag, len(train.factors[train.FACTORS_MAP[tag]].words)) for tag in args.tags),
+                                   len(train.factors[train.DEPREL].words), predict_only=args.predict)
+            networks[-1].saver_inference.restore(networks[-1].session, checkpoint)
+
+        with open(args.predict_output, "w", encoding="utf-8") as output_file:
+            sentences = 0
+            while not test.epoch_finished():
+                sentence_lens, word_ids, charseq_ids, charseqs, charseq_lens = test.next_batch(args.batch_size)
+
+                prediction_probs, head_probs, deprel_hidden_layers = None, None, []
+                for network in networks:
+                    feeds = {network.is_training: False, network.sentence_lens: sentence_lens,
+                             network.charseqs: charseqs[train.FORMS], network.charseq_lens: charseq_lens[train.FORMS],
+                             network.word_ids: word_ids[train.FORMS], network.charseq_ids: charseq_ids[train.FORMS]}
+                    if args.embeddings:
+                        embeddings = np.zeros([word_ids[train.EMBEDDINGS].shape[0], word_ids[train.EMBEDDINGS].shape[1], args.embeddings_size])
+                        for i in range(embeddings.shape[0]):
+                            for j in range(embeddings.shape[1]):
+                                if word_ids[train.EMBEDDINGS][i, j]:
+                                    embeddings[i, j] = args.embeddings_data[word_ids[train.EMBEDDINGS][i, j] - 1]
+                        feeds[network.embeddings] = embeddings
+                    if args.elmo_size:
+                        feeds[network.elmo] = word_ids[train.ELMO]
+
+                    targets = [network.prediction_probs]
+                    if args.parse: targets.extend([network.heads_probs, network.deprel_hidden_layer])
+                    predictions, *other_values = network.session.run(targets, feeds)
+                    if prediction_probs is None:
+                        prediction_probs = predictions
+                    else:
+                        for k in predictions:
+                            prediction_probs[k] += predictions[k]
+                    if args.parse:
+                        prior_heads, deprel_hidden_layer, *_ = other_values
+                        head_probs = head_probs + prior_heads if head_probs is not None else prior_heads
+                        deprel_hidden_layers.append(deprel_hidden_layer)
+
+                if args.parse:
+                    prior_heads = np.log(head_probs / len(networks))
+                    heads = np.zeros(prior_heads.shape[:2], dtype=np.int32)
+                    for i in range(len(sentence_lens)):
+                        padded_heads = np.pad(prior_heads[i][:sentence_lens[i], :sentence_lens[i] + 1].astype(np.float),
+                                              ((1, 0), (0, 0)), mode="constant")
+                        padded_heads[:, 0] = np.nan
+                        padded_heads[1 + np.argmax(prior_heads[i][:sentence_lens[i], 0]), 0] = 0
+                        chosen_heads, _ = dependency_decoding.chu_liu_edmonds(padded_heads)
+                        heads[i, :sentence_lens[i]] = chosen_heads[1:]
+
+                    deprel_probs = None
+                    for network, deprel_hidden_layer in zip(networks, deprel_hidden_layers):
+                        deprels = network.session.run(
+                            network.predictions_deprel_probs,
+                            {network.is_training: False, network.deprel_hidden_layer: deprel_hidden_layer, network.deprel_heads: heads})
+                        deprel_probs = deprel_probs + deprels if deprel_probs is not None else deprels
+
+                for i in range(len(sentence_lens)):
+                    overrides = [None] * test.FACTORS
+                    for tag in args.tags: overrides[test.FACTORS_MAP[tag]] = np.argmax(prediction_probs[tag][i], axis=1)
+                    if args.parse:
+                        overrides[test.HEAD] = heads[i]
+                        overrides[test.DEPREL] = np.argmax(deprel_probs[i], axis=1)
+                    test.write_sentence(output_file, sentences, overrides)
+                    sentences += 1
+
+            exit(0)
 
     # Construct the network
     network = Network(threads=args.threads, seed=args.seed)
