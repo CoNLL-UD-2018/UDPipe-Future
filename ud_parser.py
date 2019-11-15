@@ -1,4 +1,14 @@
 #!/usr/bin/env python3
+
+# This file is part of UDPipe Future <http://github.com/CoNLL-UD-2018/UDPipe-Future>.
+#
+# Copyright 2019 Institute of Formal and Applied Linguistics, Faculty of
+# Mathematics and Physics, Charles University in Prague, Czech Republic.
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 import numpy as np
 import tensorflow as tf
 import dependency_decoding
