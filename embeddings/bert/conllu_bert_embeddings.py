@@ -42,7 +42,7 @@ if __name__ == "__main__":
                 if not in_sentence:
                     sentences.append([])
                     in_sentence = True
-                if line.startswith("#"): continue
+                if not re.match(r"^[0-9]*\t", line): continue
                 columns = line.split("\t")
                 assert len(columns) == 10
                 sentences[-1].append(columns[1])
