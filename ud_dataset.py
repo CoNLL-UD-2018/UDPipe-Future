@@ -59,6 +59,8 @@ def _gen_lemma_rule(form, lemma, allow_copy):
     return rule
 
 def _apply_lemma_rule(form, lemma_rule):
+    if ';' not in lemma_rule:
+        raise ValueError('lemma_rule %r for form %r missing semicolon' %(lemma_rule, form))
     casing, rule = lemma_rule.split(";", 1)
     if rule.startswith("a"):
         lemma = rule[1:]
