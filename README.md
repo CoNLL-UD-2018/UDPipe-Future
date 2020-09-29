@@ -9,9 +9,6 @@ The original system submitted to the Shared Task can be found in `shared-task`
 branch.
 
 UDPipe 2.0 is currently being developed in the
-[udpipe-2 branch](https://github.com/ufal/udpipe/tree/udpipe-2)
-of the
-[udpipe repository](https://github.com/ufal/udpipe)
-and a first
-[release](https://github.com/ufal/udpipe/releases)
-is expected in 2021.
+[udpipe-2 branch](https://github.com/ufal/udpipe/tree/udpipe-2) of the
+[UDPipe repository](https://github.com/ufal/udpipe) and a first
+[release](https://github.com/ufal/udpipe/releases) is expected in Q4 2020.
